@@ -1,5 +1,4 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -298,33 +297,14 @@ export default function App() {
   }
 
   const navigateSurface = (nextSurface: Surface) => {
-    const updateSurface = () => {
-      flushSync(() => {
-        setSurface(nextSurface)
-        setActivePostId(null)
-      })
-      const nextPath = nextSurface === 'agent' ? '/agent' : '/feed'
-      const currentHash = window.location.hash
-      const nextHash = nextSurface === 'agent'
-        ? (currentHash.startsWith('#thread=') ? currentHash : '')
-        : ''
-      if (window.location.pathname !== nextPath || currentHash !== nextHash) window.history.pushState({}, '', `${nextPath}${window.location.search}${nextHash}`)
-    }
-    if (nextSurface === surface) { updateSurface(); return }
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const transitionDocument = document as Document & { startViewTransition?: (callback: () => void) => unknown }
-    if (!reduceMotion && typeof transitionDocument.startViewTransition === 'function') {
-      transitionDocument.startViewTransition(updateSurface)
-      return
-    }
-    if (!reduceMotion) {
-      updateSurface()
-      document.documentElement.dataset.surfaceTransition = nextSurface
-      window.requestAnimationFrame(() => { document.documentElement.dataset.surfaceTransition = 'settled' })
-      window.setTimeout(() => { delete document.documentElement.dataset.surfaceTransition }, 340)
-      return
-    }
-    updateSurface()
+    setSurface(nextSurface)
+    setActivePostId(null)
+    const nextPath = nextSurface === 'agent' ? '/agent' : '/feed'
+    const currentHash = window.location.hash
+    const nextHash = nextSurface === 'agent'
+      ? (currentHash.startsWith('#thread=') ? currentHash : '')
+      : ''
+    if (window.location.pathname !== nextPath || currentHash !== nextHash) window.history.pushState({}, '', `${nextPath}${window.location.search}${nextHash}`)
   }
 
   useEffect(() => {
