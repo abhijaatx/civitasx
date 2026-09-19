@@ -2035,3 +2035,36 @@ html[data-input-modality='keyboard'] button:focus, html[data-input-modality='key
   .post-detail-aside { grid-template-columns: 1fr; }
   .post-detail-aside-card, .post-detail-aside-note, .post-detail-section { padding: 16px; }
 }
+
+/* Feed ↔ Agent continuity: one authored navigation moment with a calm fallback. */
+.app-main { view-transition-name: civitas-main; }
+::view-transition-old(civitas-main),
+::view-transition-new(civitas-main) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(.16, 1, .3, 1);
+}
+::view-transition-old(civitas-main) { animation-name: civitas-surface-out; }
+::view-transition-new(civitas-main) { animation-name: civitas-surface-in; }
+@keyframes civitas-surface-out {
+  to { opacity: 0; transform: translateX(-12px); filter: blur(2px); }
+}
+@keyframes civitas-surface-in {
+  from { opacity: 0; transform: translateX(18px); filter: blur(2px); }
+  to { opacity: 1; transform: translateX(0); filter: blur(0); }
+}
+html[data-surface-transition='agent'] .app-main { animation: civitas-agent-in 300ms cubic-bezier(.16, 1, .3, 1) both; }
+html[data-surface-transition='feed'] .app-main { animation: civitas-feed-in 300ms cubic-bezier(.16, 1, .3, 1) both; }
+html[data-surface-transition='settled'] .app-main { animation: none; }
+@keyframes civitas-agent-in {
+  from { opacity: 0; transform: translateX(18px); filter: blur(2px); }
+  to { opacity: 1; transform: translateX(0); filter: blur(0); }
+}
+@keyframes civitas-feed-in {
+  from { opacity: 0; transform: translateX(-18px); filter: blur(2px); }
+  to { opacity: 1; transform: translateX(0); filter: blur(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(civitas-main), ::view-transition-new(civitas-main) { animation-duration: 1ms !important; }
+  html[data-surface-transition='agent'] .app-main,
+  html[data-surface-transition='feed'] .app-main { animation: none; }
+}
