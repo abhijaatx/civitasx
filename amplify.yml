@@ -1,0 +1,20 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd apps/web
+        - npm ci
+    build:
+      commands:
+        # Configure CIVITAS_API_URL in Amplify to the deployed SAM Function URL.
+        # Export it in the build shell so Vite embeds the real API origin.
+        - export VITE_API_URL="${CIVITAS_API_URL:-}"
+        - npm run build
+  artifacts:
+    baseDirectory: apps/web/dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - apps/web/node_modules/**/*

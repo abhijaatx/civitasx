@@ -1,0 +1,340 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: CivitasX Phase 2 foundation — grounded Bengaluru research, authenticated cases, and usage guardrails.
+
+Parameters:
+  StageName:
+    Type: String
+    Default: dev
+    AllowedPattern: '^[a-z][a-z0-9-]{0,15}$'
+  FrontendOrigin:
+    Type: String
+    Default: http://localhost:5173
+    Description: Exact browser origin allowed to call the API.
+  CognitoDomainPrefix:
+    Type: String
+    Default: civitasx-phase2-change-me
+    Description: Globally unique Cognito hosted UI prefix. Change before deploying.
+  AlertEmail:
+    Type: String
+    Default: ''
+    Description: Optional email address for the AWS Budgets alert.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 80
+    MinValue: 1
+    Description: Planned monthly admission ceiling for paid operations.
+  BrowserConcurrency:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 20
+
+Conditions:
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
+
+Globals:
+  Function:
+    Timeout: 120
+    MemorySize: 512
+    Runtime: python3.12
+    Architectures: [arm64]
+    Environment:
+      Variables:
+        CIVITAS_ENVIRONMENT: !Ref StageName
+        CIVITAS_AUTH_MODE: cognito
+        CIVITAS_STORAGE: dynamodb
+        CIVITAS_DYNAMODB_TABLE: !Ref CivitasTable
+        CIVITAS_DYNAMODB_REGION: !Ref AWS::Region
+        CIVITAS_ARTIFACTS_BUCKET: !Ref CivitasArtifacts
+        CIVITAS_CORPUS_BUCKET: !Ref CivitasCorpus
+        CIVITAS_CORPUS_PATH: data/corpus/manifest.json
+        CIVITAS_LIVE_CACHE_PATH: /tmp/live-sources.json
+        CIVITAS_LIVE_CACHE_BUCKET: !Ref CivitasCorpus
+        CIVITAS_LIVE_CACHE_PREFIX: runtime/live-sources/
+        CIVITAS_LIVE_STATUS_PATH: /tmp/live-connector-status.json
+        CIVITAS_LIVE_STATUS_BUCKET: !Ref CivitasCorpus
+        CIVITAS_LIVE_STATUS_PREFIX: runtime/live-status/
+        CIVITAS_TRANSLATION_CACHE_PATH: /tmp/translation-cache.json
+        CIVITAS_FRONTEND_ORIGIN: !Ref FrontendOrigin
+        CIVITAS_GLOBAL_BUDGET_USD: !Ref MonthlyBudgetUsd
+        CIVITAS_BROWSER_CONCURRENCY: !Ref BrowserConcurrency
+        CIVITAS_COGNITO_REGION: !Ref AWS::Region
+        CIVITAS_COGNITO_USER_POOL_ID: !Ref CivitasUserPool
+        CIVITAS_COGNITO_CLIENT_ID: !Ref CivitasUserPoolClient
+        CIVITAS_COGNITO_DOMAIN: !Sub '${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
+        CIVITAS_AGENT_PROVIDER: bedrock
+        CIVITAS_BEDROCK_MODEL: amazon.nova-lite-v1:0
+        AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
+        AWS_LWA_INVOKE_MODE: response_stream
+
+Resources:
+  CivitasUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub civitasx-${StageName}
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolTags:
+        Product: CivitasX
+        Phase: '2'
+
+  CivitasUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CivitasUserPool
+      ClientName: !Sub civitasx-${StageName}-web
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email, profile]
+      CallbackURLs:
+        - !Ref FrontendOrigin
+      LogoutURLs:
+        - !Ref FrontendOrigin
+      SupportedIdentityProviders: [COGNITO]
+
+  CivitasUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref CivitasUserPool
+
+  CivitasTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub civitasx-${StageName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Product
+          Value: CivitasX
+        - Key: Phase
+          Value: '2'
+
+  CivitasArtifacts:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireTemporaryBrowserArtifacts
+            Status: Enabled
+            Prefix: browser/
+            ExpirationInDays: 30
+
+  CivitasCorpus:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Product
+          Value: CivitasX
+        - Key: Phase
+          Value: '2'
+
+  CivitasApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub civitasx-${StageName}-api
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: civitasx-runtime
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:ConditionCheckItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:TransactGetItems
+                  - dynamodb:TransactWriteItems
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt CivitasTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${CivitasArtifacts.Arn}/*'
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt CivitasArtifacts.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub '${CivitasCorpus.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !GetAtt CivitasCorpus.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:Converse
+                Resource:
+                  - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.nova-*
+                  - !Sub arn:${AWS::Partition}:bedrock:*::foundation-model/amazon.titan-embed-*
+                  - !Sub arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/*amazon.nova-*
+
+  CivitasApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub civitasx-${StageName}-api
+      CodeUri: ../services/api/
+      Handler: run.sh
+      Role: !GetAtt CivitasApiRole.Arn
+      Layers:
+        - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:753240598075:layer:LambdaAdapterLayerArm64:28
+      FunctionUrlConfig:
+        AuthType: NONE
+        InvokeMode: RESPONSE_STREAM
+        Cors:
+          AllowOrigins:
+            - !Ref FrontendOrigin
+          AllowMethods: [GET, POST, PATCH, DELETE, OPTIONS]
+          AllowHeaders: [Authorization, Content-Type]
+          MaxAge: 600
+      Tags:
+        Product: CivitasX
+        Phase: '2'
+
+  CivitasApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/civitasx-${StageName}-api
+      RetentionInDays: 14
+
+  CivitasBudgetTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasAlertEmail
+    Properties:
+      TopicName: !Sub civitasx-${StageName}-budget-alerts
+
+  CivitasBudgetSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+      TopicArn: !Ref CivitasBudgetTopic
+
+  CivitasBudget:
+    Type: AWS::Budgets::Budget
+    Condition: HasAlertEmail
+    Properties:
+      Budget:
+        BudgetName: !Sub civitasx-${StageName}-monthly
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+        TimeUnit: MONTHLY
+        BudgetType: COST
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref CivitasBudgetTopic
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: SNS
+              Address: !Ref CivitasBudgetTopic
+
+Outputs:
+  ApiUrl:
+    Description: Phase 2 API Function URL
+    Value: !GetAtt CivitasApiUrl.FunctionUrl
+  UserPoolId:
+    Description: Cognito user pool ID
+    Value: !Ref CivitasUserPool
+  UserPoolClientId:
+    Description: Cognito public app client ID
+    Value: !Ref CivitasUserPoolClient
+  CognitoDomain:
+    Description: Cognito hosted UI domain
+    Value: !Sub https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref CivitasTable
+  ArtifactsBucket:
+    Description: Private S3 artifacts bucket
+    Value: !Ref CivitasArtifacts
+  CorpusBucket:
+    Description: Versioned private source corpus bucket
+    Value: !Ref CivitasCorpus

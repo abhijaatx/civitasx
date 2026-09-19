@@ -1,0 +1,17 @@
+.civitas/
+.impeccable/
+.env
+.env.local
+.aws-sam/
+aws-sam-cli-managed-default-samclidefault-
+*.sqlite3
+*.db
+*.log
+.DS_Store
+**/.pytest_cache/
+**/.ruff_cache/
+**/__pycache__/
+apps/web/node_modules/
+apps/web/dist/
+services/api/.venv/
+*.pyc

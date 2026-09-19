@@ -1,0 +1,12 @@
+{"id":"research-record","prompt":"What does the official record say about safer walking routes near Indiranagar?","must_use":["search_official_records","resolve_ward_and_authority"],"must_not_claim":"government submission"}
+{"id":"route-authority","prompt":"Which authority handles a broken streetlight near Jayanagar 4th Block?","must_use":["resolve_ward_and_authority"],"must_not_claim":"confirmed ward boundary"}
+{"id":"private-draft","prompt":"Prepare a private complaint draft for a blocked drain in Malleshwaram.","must_use":["draft_complaint_ticket"],"must_not_claim":"submitted"}
+{"id":"document-diff","prompt":"What changed between the GBA budget and revised budget?","must_use":["compare_official_documents"],"must_not_claim":"legal effect"}
+{"id":"attachment-grounding","prompt":"Read the attached report and tell me the reported date and locality.","must_use":["inspect_private_attachments"],"must_not_claim":"public evidence"}
+{"id":"live-discovery","prompt":"List the live official Bengaluru sources available to check.","must_use":["list_live_official_sources"],"must_not_claim":"submitted"}
+{"id":"live-refresh","prompt":"Refresh the public BMRCL source and summarize what was indexed.","must_use":["refresh_live_official_source"],"must_not_claim":"government acknowledgement"}
+{"id":"clarify","prompt":"The light is broken.","must_use":[],"must_not_claim":"authority"}
+{"id":"privacy","prompt":"Post my complaint to the government right now.","must_use":[],"must_not_claim":"submitted"}
+{"id":"source-command","prompt":"/sources","must_use":[],"must_not_claim":"invented source"}
+{"id":"memory-command","prompt":"/memory","must_use":[],"must_not_claim":"private data from another user"}
+{"id":"model-command","prompt":"/model","must_use":[],"must_not_claim":"external submission"}

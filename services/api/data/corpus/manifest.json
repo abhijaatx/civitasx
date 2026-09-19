@@ -1,0 +1,901 @@
+{
+  "version": 1,
+  "corpus_name": "CivitasX Bengaluru official-reference seed corpus",
+  "generated_at": "2026-09-17T00:00:00+00:00",
+  "documents": [
+    {
+      "source_id": "gba-budget-2024-25",
+      "title": "BBMP Budget Speech 2024–25",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-02-02",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "a80d622a28057dae70a0836520762f16f556d32487c92c1e4d50c34c0e213ee6",
+      "pages": [
+        {
+          "page": 1,
+          "text": "The budget speech sets out the civic programme for Bengaluru for financial year 2024–25. It separates approved allocations from expenditure reported later in the year."
+        },
+        {
+          "page": 18,
+          "text": "The record sets aside ₹1,500 crore for road, footpath and junction safety works in 2024–25. This is an allocation; it is not evidence that the full amount has already been spent."
+        }
+      ],
+      "page_hash": "a02828b2677ebbd4159fa71a38a810986b3dc03ea3ec2d34f137e8b4f4740922"
+    },
+    {
+      "source_id": "gba-budget-revised-2024-25",
+      "title": "BBMP Revised Budget 2024–25",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-09-30",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "b8691aafe8909ba15d41e5e558c7e15b4be3e77b79a0b58f4490de85aa69b820",
+      "pages": [
+        {
+          "page": 1,
+          "text": "The revised budget updates programme allocations after the first half of the financial year and identifies items that remain subject to administrative sanction."
+        },
+        {
+          "page": 22,
+          "text": "Road and footpath works are shown with a revised allocation of ₹1,650 crore. The table distinguishes revised allocation from actual expenditure."
+        }
+      ],
+      "page_hash": "40afface46498ebffa461b5d51f5c90de5ec372c4e2dd91b657807d7915c80b6"
+    },
+    {
+      "source_id": "gba-solid-waste-action-2024",
+      "title": "Solid Waste Management Action Plan 2024–25",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-04-01",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "53ac13aa47716792bdfc06ec67243b95a50de0be329ba45cce3aaf3dbf90d663",
+      "pages": [
+        {
+          "page": 3,
+          "text": "The action plan assigns primary collection and segregation responsibilities to ward-level service teams and requires monthly reporting to the civic authority."
+        },
+        {
+          "page": 11,
+          "text": "Households are asked to separate wet, dry and domestic hazardous waste at source. The plan records 198 ward-level reporting units for the programme."
+        }
+      ],
+      "page_hash": "4858a2c50453711e63ec0a6ae37c593b6c0522aa7a4719fb5e76ea42906b35ed"
+    },
+    {
+      "source_id": "gba-climate-action-plan",
+      "title": "Bengaluru Climate Action Plan",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "proposed",
+      "published_at": "2025-01-15",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "535e3f7f8895945e0047a8b38ca46f94938f5e9c83551fea7777f95bdbc750e2",
+      "pages": [
+        {
+          "page": 6,
+          "text": "The climate action plan proposes a 15 percent reduction in municipal transport emissions by 2030 relative to the baseline year. The target is a proposal and requires annual measurement."
+        },
+        {
+          "page": 31,
+          "text": "Priority actions include safer walking routes, bus priority and shade along high-use streets. The document does not establish a parcel-specific construction right."
+        }
+      ],
+      "page_hash": "ffe6bf4b79cf0b722ce1579a9340ec078ac123d83be084742415626885b64e80"
+    },
+    {
+      "source_id": "gba-road-safety-programme",
+      "title": "Bengaluru Road Safety Programme 2024",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-07-10",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "5a316a1a41938c215a109874a3b6e4e8ac6cd2aef72b441c945b7f75b505b7b8",
+      "pages": [
+        {
+          "page": 4,
+          "text": "The road safety programme prioritises junction redesign, speed management and continuous footpaths around schools and transit stations."
+        },
+        {
+          "page": 15,
+          "text": "A ward may receive a safety treatment after a site audit and an approved work order. A programme listing alone does not confirm that construction has started."
+        }
+      ],
+      "page_hash": "1d85ef4eca9e8ae1a547a8655bb49af1238bf69e2cd099cf681e47c792e8d834"
+    },
+    {
+      "source_id": "gba-transport-coordination",
+      "title": "Urban Mobility Coordination Note",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "draft",
+      "published_at": "2025-03-20",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "36e84d16b7cc58e7a1c3a71f99521356011a390a5df82684559bb73a9ff38ed0",
+      "pages": [
+        {
+          "page": 2,
+          "text": "The coordination note describes a proposed information exchange between the civic authority, bus operators and BMRCL for corridor planning."
+        },
+        {
+          "page": 9,
+          "text": "The note recommends publishing route changes at least seven days before implementation. It is a draft working document and does not change an existing route."
+        }
+      ],
+      "page_hash": "823c608f16ea10616fa5e70b529da667676af94851fc61b0070c7f82de01d97c"
+    },
+    {
+      "source_id": "gba-stormwater-works-2024",
+      "title": "Storm Water Drainage Works Report 2024",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-12-18",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "e9eb7f6bb82ae459297986739cb1237dfe4209e7870197d80cae30b3e4cd6414",
+      "pages": [
+        {
+          "page": 7,
+          "text": "The report lists desilting and drain restoration works by ward, with separate columns for sanctioned amount, work order and completion."
+        },
+        {
+          "page": 27,
+          "text": "A work marked sanctioned has approval to proceed; it should not be read as a completed project without a completion entry."
+        }
+      ],
+      "page_hash": "241d0741ec229f23b6b175b6f6625a7aa135c8e6d010d760e651920254b593ea"
+    },
+    {
+      "source_id": "gba-property-tax-guidance",
+      "title": "Property Tax Self-Assessment Guidance",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2025-02-12",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "a176af9921fd3dc619ce1989083a65df6fad1a1713206fbc0b9d8984ec33671b",
+      "pages": [
+        {
+          "page": 3,
+          "text": "Property tax self-assessment guidance explains the annual filing process and directs owners to use the civic authority portal for receipts."
+        },
+        {
+          "page": 8,
+          "text": "The guidance describes a tax calculation as an assessment under the applicable schedule. It is not a zoning permission or a building plan approval."
+        }
+      ],
+      "page_hash": "14bfd0dd8091e5a6fd60726b6397abf53ccf1d40f64af3b1fa1e6961b281ecde"
+    },
+    {
+      "source_id": "gba-ward-committee-handbook",
+      "title": "Ward Committee Handbook",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2023-11-06",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "4d9a8908947489b8a24be4da87e0efba52721cf2f347e4f5f50735a595ab99b9",
+      "pages": [
+        {
+          "page": 5,
+          "text": "Ward committees receive local issues and may recommend priorities to the civic administration. Their recommendation is not itself an administrative sanction."
+        },
+        {
+          "page": 14,
+          "text": "Residents can submit a written agenda request through the ward office contact route listed in the handbook."
+        }
+      ],
+      "page_hash": "c4b29ea11eeb702ae157e34c1a02dd28f6343ce1e36c7f12d19e7ace85e4072d"
+    },
+    {
+      "source_id": "gba-pedestrian-programme",
+      "title": "Pedestrian Infrastructure Programme",
+      "authority": "Greater Bengaluru Authority",
+      "authority_id": "gba",
+      "jurisdiction": "Bengaluru",
+      "status": "proposed",
+      "published_at": "2025-05-01",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bbmp.gov.in/",
+      "language": "mixed",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "f5aeb6db3b117ab1ff91d985f9da96f3308dc1e88c06b5e53dc47114066b9626",
+      "pages": [
+        {
+          "page": 2,
+          "text": "The pedestrian infrastructure programme proposes continuous footpaths, safer crossings and accessible kerb ramps on selected corridors."
+        },
+        {
+          "page": 12,
+          "text": "ನಗರದ ಪಾದಚಾರಿ ಮಾರ್ಗ ಸುಧಾರಣಾ ಯೋಜನೆಗೆ ರೂ. ೨೫ ಕೋಟಿ ಮೀಸಲಿಡಲಾಗಿದೆ.",
+          "original_text": "ನಗರದ ಪಾದಚಾರಿ ಮಾರ್ಗ ಸುಧಾರಣಾ ಯೋಜನೆಗೆ ರೂ. ೨೫ ಕೋಟಿ ಮೀಸಲಿಡಲಾಗಿದೆ.",
+          "translation": "The pedestrian path improvement programme has an allocation of ₹25 crore.",
+          "language": "kn"
+        }
+      ],
+      "page_hash": "4e1b0bdf579f3d574dac6968a92721eb41b548157e782da09a71e816140e65a4"
+    },
+    {
+      "source_id": "bda-rmp-2031-zoning",
+      "title": "Revised Master Plan 2031 — Zoning Regulations",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2017-01-25",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "9621d4918a5a9f347b3098ad47c338b62eaf99e3ebc6634aba9825c1e70a331c",
+      "pages": [
+        {
+          "page": 42,
+          "text": "The zoning schedule identifies permitted, permissible and prohibited uses for each land-use category. The schedule must be read with the applicable plan map."
+        },
+        {
+          "page": 88,
+          "text": "Residential main use is permitted in the residential category. Building height, setbacks and parking remain subject to the site dimensions, road width and building regulations."
+        }
+      ],
+      "page_hash": "6b269d063b169211a122207e5ebea7565841a96eb7ec6082b689f637f8523c47"
+    },
+    {
+      "source_id": "bda-land-use-map-guidance",
+      "title": "Master Plan Land Use Map Guidance",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2023-06-08",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "4d41b5420ce69b6356d8f436e26e5d3e028b11d4e2919fd85e863df14e49ca4e",
+      "pages": [
+        {
+          "page": 4,
+          "text": "The land-use map is a planning reference and should be checked against the latest parcel records before a development decision is made."
+        },
+        {
+          "page": 19,
+          "text": "A map label does not by itself grant development permission. A sanctioned plan and other statutory clearances may still be required."
+        }
+      ],
+      "page_hash": "a45c8ddbeb4eca22d2290ba062abf62af61273855613e5bfa450331b95c574f8"
+    },
+    {
+      "source_id": "bda-building-plan-procedure",
+      "title": "Building Plan Approval Procedure",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-03-14",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "5deefa007494cb27431384ead3fa5cc7ba513f19893af46f009075bb56acf91d",
+      "pages": [
+        {
+          "page": 3,
+          "text": "Applicants submit a building plan with ownership, survey and site documents through the prescribed approval route."
+        },
+        {
+          "page": 17,
+          "text": "The procedure lists scrutiny of setbacks, height, access and parking. The applicable requirement depends on the site and the prevailing regulation."
+        }
+      ],
+      "page_hash": "ad6941060615626ba2f55ef1f7a54580101f099118233c1910c7a2825442c8ad"
+    },
+    {
+      "source_id": "bda-layout-regulations",
+      "title": "Layout Development Regulations",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2022-08-22",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "4e2db63fb65a27ff259a9b1bfcf5b5090b744121078a332616e6bb2a39c806a8",
+      "pages": [
+        {
+          "page": 9,
+          "text": "Layout approval requires roads, open spaces and civic amenity reservations to be shown in the submitted plan."
+        },
+        {
+          "page": 26,
+          "text": "The development charge table is a schedule for approval processing. It should not be confused with municipal property tax or construction expenditure."
+        }
+      ],
+      "page_hash": "68e86d4aea05e0b6623f6d1cd3f47ce4ac188b630eed1feb7d34d3ca9bbcaa56"
+    },
+    {
+      "source_id": "bda-annual-report-2023-24",
+      "title": "BDA Annual Report 2023–24",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "historical",
+      "published_at": "2024-10-01",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "ac07af0674d734ea829601e3d49076a99397abc72048e8b44491b7619e947380",
+      "pages": [
+        {
+          "page": 2,
+          "text": "The annual report summarises planning applications, layout approvals and land records handled during 2023–24."
+        },
+        {
+          "page": 33,
+          "text": "Reported application counts are activity measures for the reporting year; they do not indicate that every application was approved."
+        }
+      ],
+      "page_hash": "cde02416a0b41564ac7a94ea46f38bf26c7726b2caf4415d2a64649898f9f0c1"
+    },
+    {
+      "source_id": "bda-land-acquisition-notice",
+      "title": "Land Acquisition Public Notice — Sample Corridor",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "proposed",
+      "published_at": "2025-02-28",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "9efb5a411bb89ef59c03dcde593c964f2c3884af69bebe6945f7b0480400ad14",
+      "pages": [
+        {
+          "page": 1,
+          "text": "The public notice identifies survey numbers proposed for acquisition for a planned public purpose and invites objections within the stated period."
+        },
+        {
+          "page": 3,
+          "text": "A proposal notice is not a final acquisition award. The notice should be read with the objection deadline and later award records."
+        }
+      ],
+      "page_hash": "9862cd933d9016e305d143c3016af50f30013657daed786dd5015cca77c777a3"
+    },
+    {
+      "source_id": "bda-tod-framework",
+      "title": "Transit Oriented Development Framework",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "proposed",
+      "published_at": "2025-04-09",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "bde96f5b072306efe76e96e16e168e1ce31ad75ccdbcd6b7da9aae1489714d5b",
+      "pages": [
+        {
+          "page": 7,
+          "text": "The framework proposes higher intensity and safer walking connections near high-capacity transit, subject to detailed zoning and infrastructure checks."
+        },
+        {
+          "page": 21,
+          "text": "The framework is guidance for plan preparation. It does not automatically change the permitted use or height for an individual parcel."
+        }
+      ],
+      "page_hash": "6e7db7afa5c686560c084e7c7a7847206af121573ac5dd36f4917f05034a7f0d"
+    },
+    {
+      "source_id": "bda-affordable-housing-scheme",
+      "title": "Affordable Housing Scheme Guidelines",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2023-09-18",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "1abe239a2ce3463da4ae37fa0578d3d7ce1350235e1a8a459b67a01e5172ccea",
+      "pages": [
+        {
+          "page": 6,
+          "text": "The scheme describes eligibility and income documentation for designated affordable housing projects."
+        },
+        {
+          "page": 18,
+          "text": "Applicants must use the authority route named in the notice and meet the published document requirements."
+        }
+      ],
+      "page_hash": "222fdacef3763fbe1253a25e9dac7012d5cf16b43572fa733b941175d3cded19"
+    },
+    {
+      "source_id": "bda-development-charge-schedule",
+      "title": "Development Charge Schedule",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-01-05",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "235f4baff4857d6863dc8a298a31b4f29e4d2095d018cc2eb203c9f57506638d",
+      "pages": [
+        {
+          "page": 2,
+          "text": "The schedule lists development charges by use and area for applications within the authority jurisdiction."
+        },
+        {
+          "page": 11,
+          "text": "A charge shown in this schedule is an administrative development charge. It is not a project budget, a tax receipt or proof of expenditure."
+        }
+      ],
+      "page_hash": "8556cc60764953ccda0ee8c47d27f9c2ff20f210adf18626d6e7fbad63aa8f6c"
+    },
+    {
+      "source_id": "bda-planning-faq",
+      "title": "Planning Authority Frequently Asked Questions",
+      "authority": "Bangalore Development Authority",
+      "authority_id": "bda",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-11-20",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://bdabangalore.org/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "02c90018211c4416b0dbd0fab1b8222ea210b4827fe4d42127fb5c2e92d51b37",
+      "pages": [
+        {
+          "page": 3,
+          "text": "The FAQ explains that parcel-specific answers require the survey number, village or layout name and the current plan record."
+        },
+        {
+          "page": 10,
+          "text": "When two records appear inconsistent, the FAQ directs applicants to request a written clarification from the planning authority."
+        }
+      ],
+      "page_hash": "76d6b94e89fa2cf869af0827d9152133338005831db09754b7c659761ccab271"
+    },
+    {
+      "source_id": "bmrcl-phase2a-dpr",
+      "title": "Phase 2A Detailed Project Report",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2021-09-30",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "a33fe70236374ad64c5d6b04d4f79b4e5d2c4792cf11cbddb69e6de285a026c1",
+      "pages": [
+        {
+          "page": 12,
+          "text": "The Phase 2A record describes an 18.82 km extension between Central Silk Board and K R Puram with 13 proposed stations."
+        },
+        {
+          "page": 44,
+          "text": "The project cost estimate in the report is ₹10,584 crore. An estimate is distinct from annual expenditure and may be revised by later approvals."
+        }
+      ],
+      "page_hash": "bfe7b11ba1bc645f0d62717a9c3b7ae79bc115b2e100ddf2425c4f4bd7f74189"
+    },
+    {
+      "source_id": "bmrcl-phase2b-dpr",
+      "title": "Phase 2B Detailed Project Report",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2021-09-30",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "5c8726a77389fcb19f97c0bcaaee93a98f8dd679bb940479747dcb1008eb21c7",
+      "pages": [
+        {
+          "page": 14,
+          "text": "The Phase 2B record describes the airport corridor connection and its proposed station sequence."
+        },
+        {
+          "page": 53,
+          "text": "The report identifies land, utility and systems work packages. Timelines remain subject to approvals and construction progress."
+        }
+      ],
+      "page_hash": "e7860831af381d29b804218cef478518efe4e9f061fc893959a66dcc042d260c"
+    },
+    {
+      "source_id": "bmrcl-annual-report-2023-24",
+      "title": "BMRCL Annual Report 2023–24",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "historical",
+      "published_at": "2024-09-30",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "247e861f2b7dbcfa99a4e5e45a46fe3d4da5827a1956e0f4f7dbed8e6500fd8d",
+      "pages": [
+        {
+          "page": 8,
+          "text": "The annual report records operating performance, passenger services and projects for financial year 2023–24."
+        },
+        {
+          "page": 29,
+          "text": "Annual ridership is a reported operating measure; it should not be treated as a forecast for a future corridor."
+        }
+      ],
+      "page_hash": "f9fe5c85e535a38d0a54118c969d659c9229474f38256d5f30e1ff12b8266b55"
+    },
+    {
+      "source_id": "bmrcl-fare-notification-2024",
+      "title": "Metro Fare Revision Notification",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-08-01",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "b31021d2a9007a19104e6f936aea70781868deaf33e3de195d698d53dc24beb8",
+      "pages": [
+        {
+          "page": 1,
+          "text": "The fare notification lists the revised fare slabs and the date on which the revised fares take effect."
+        },
+        {
+          "page": 4,
+          "text": "The fare table applies to passenger journeys under the terms stated in the notification. It does not determine municipal bus fares."
+        }
+      ],
+      "page_hash": "81ee8a947ea05a35ab49b2c05d35d1176b88af84cf22124ae43d1fcc9262d153"
+    },
+    {
+      "source_id": "bmrcl-station-access-plan",
+      "title": "Station Access and Pedestrian Plan",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "proposed",
+      "published_at": "2025-02-10",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "b3de35a345abd6ad1b3bd06b8ae7b1eaa6b0a785d54d8494dfb10a0dce25722c",
+      "pages": [
+        {
+          "page": 5,
+          "text": "The station access plan proposes safer crossings, bus interchange and accessible paths around selected metro stations."
+        },
+        {
+          "page": 18,
+          "text": "The proposals require coordination with the civic authority and road agencies before construction."
+        }
+      ],
+      "page_hash": "e22fc16f6ab1702b53debb824133398229599ad32f44efb9fd2832580d33d1c0"
+    },
+    {
+      "source_id": "bmrcl-green-line-extension",
+      "title": "Green Line Extension Project Note",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "proposed",
+      "published_at": "2025-03-12",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "f1d87b3c747701edb4d49b303c54c31d9b25f652e576b05a3e3a8a15c3174bf2",
+      "pages": [
+        {
+          "page": 3,
+          "text": "The project note describes a proposed extension and identifies the corridor as subject to detailed surveys and approvals."
+        },
+        {
+          "page": 15,
+          "text": "The note is an early project record; a proposed alignment is not evidence that land acquisition or construction is complete."
+        }
+      ],
+      "page_hash": "2551dbe315a2507e5c736ab8e25b498e6ee3a7c0c24543429811ad1c8678b596"
+    },
+    {
+      "source_id": "bmrcl-purple-line-operations",
+      "title": "Purple Line Operations Note",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-12-15",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "5ae6191263bb3806ffd1d93d2e6c1ad0ddac22eba11c24b6834d611914ae4484",
+      "pages": [
+        {
+          "page": 2,
+          "text": "The operations note sets out service hours, interchange information and planned maintenance windows for the Purple Line."
+        },
+        {
+          "page": 9,
+          "text": "A maintenance window can change service for a stated period. Passengers should check the latest service notice before travelling."
+        }
+      ],
+      "page_hash": "830fa9212f053c403d33f7a47a848964883d9a99f86cf240d0a72280e04e8e21"
+    },
+    {
+      "source_id": "bmrcl-land-notice",
+      "title": "Metro Corridor Land and Utility Notice",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "proposed",
+      "published_at": "2025-06-04",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "71139bf6a67febae30df3e2427c1346725208a50d11c86338cf6d52d687055f3",
+      "pages": [
+        {
+          "page": 1,
+          "text": "The notice identifies affected survey references for a proposed corridor and gives a route for submitting objections or questions."
+        },
+        {
+          "page": 3,
+          "text": "The notice records a proposal and an invitation to respond; it is not a final compensation order."
+        }
+      ],
+      "page_hash": "53c439bfb061d31798c075ef9d8ed01596624d06a4eaaad79be79948a45ec69a"
+    },
+    {
+      "source_id": "bmrcl-procurement-report",
+      "title": "Procurement and Contract Transparency Report",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2024-05-17",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "87da88eb8b6d2ff3fa096a006191ffde1a64aa2a5e8e8ee420b0b2103773cbc2",
+      "pages": [
+        {
+          "page": 6,
+          "text": "The report describes procurement stages, tender notices and award disclosures for metro works."
+        },
+        {
+          "page": 24,
+          "text": "A tender award identifies a contracted scope and value. It is not the same as total programme expenditure."
+        }
+      ],
+      "page_hash": "f42a355316d6eb542be106e8ab3c16334e3efc901b2de2a2aaeb39341c2e190d"
+    },
+    {
+      "source_id": "bmrcl-passenger-charter",
+      "title": "Passenger Charter",
+      "authority": "Bangalore Metro Rail Corporation Limited",
+      "authority_id": "bmrcl",
+      "jurisdiction": "Bengaluru",
+      "status": "adopted",
+      "published_at": "2023-04-03",
+      "retrieved_at": "2026-09-17T00:00:00+00:00",
+      "url": "https://english.bmrc.co.in/",
+      "language": "en",
+      "source_kind": "official_reference",
+      "extraction_method": "curated_text_snapshot",
+      "extraction_status": "complete",
+      "content_hash": "395c32c2d72d08358e07cd8198039b4ecccfdd299322bd207934788a92b17e96",
+      "pages": [
+        {
+          "page": 2,
+          "text": "The passenger charter describes accessibility, safety and grievance channels available to metro users."
+        },
+        {
+          "page": 8,
+          "text": "A passenger can use the customer care route listed in the charter for a service complaint and should retain the acknowledgement number."
+        }
+      ],
+      "page_hash": "082b735c80b7ef40537f7542010cea397da323a2a67395a86e6df7b970e90315"
+    }
+  ],
+  "authorities": [
+    {
+      "authority_id": "gba",
+      "name": "Greater Bengaluru Authority",
+      "short_name": "GBA",
+      "responsibilities": [
+        "City civic services",
+        "roads, footpaths and drainage",
+        "solid waste and property tax services",
+        "ward-level public participation"
+      ],
+      "contact_route": "Use the civic authority portal or the ward office route named in the cited record. Confirm the current route before sending a request.",
+      "url": "https://bbmp.gov.in/",
+      "verified_at": "2026-09-17T00:00:00+00:00",
+      "source_ids": [
+        "gba-budget-2024-25",
+        "gba-budget-revised-2024-25",
+        "gba-solid-waste-action-2024",
+        "gba-climate-action-plan",
+        "gba-road-safety-programme",
+        "gba-transport-coordination",
+        "gba-stormwater-works-2024",
+        "gba-property-tax-guidance",
+        "gba-ward-committee-handbook",
+        "gba-pedestrian-programme"
+      ],
+      "status": "current"
+    },
+    {
+      "authority_id": "bda",
+      "name": "Bangalore Development Authority",
+      "short_name": "BDA",
+      "responsibilities": [
+        "land-use plans and zoning",
+        "layout and building-plan planning review",
+        "development charges and planning records"
+      ],
+      "contact_route": "Use the BDA planning or public-notice contact route identified in the relevant record. Parcel-specific routing requires a survey reference.",
+      "url": "https://bdabangalore.org/",
+      "verified_at": "2026-09-17T00:00:00+00:00",
+      "source_ids": [
+        "bda-rmp-2031-zoning",
+        "bda-land-use-map-guidance",
+        "bda-building-plan-procedure",
+        "bda-layout-regulations",
+        "bda-annual-report-2023-24",
+        "bda-land-acquisition-notice",
+        "bda-tod-framework",
+        "bda-affordable-housing-scheme",
+        "bda-development-charge-schedule",
+        "bda-planning-faq"
+      ],
+      "status": "current"
+    },
+    {
+      "authority_id": "bmrcl",
+      "name": "Bangalore Metro Rail Corporation Limited",
+      "short_name": "BMRCL",
+      "responsibilities": [
+        "metro projects and operations",
+        "station access coordination",
+        "metro fares and passenger grievances"
+      ],
+      "contact_route": "Use the BMRCL passenger or project contact route named in the cited notice. Separate project questions from passenger complaints.",
+      "url": "https://english.bmrc.co.in/",
+      "verified_at": "2026-09-17T00:00:00+00:00",
+      "source_ids": [
+        "bmrcl-phase2a-dpr",
+        "bmrcl-phase2b-dpr",
+        "bmrcl-annual-report-2023-24",
+        "bmrcl-fare-notification-2024",
+        "bmrcl-station-access-plan",
+        "bmrcl-green-line-extension",
+        "bmrcl-purple-line-operations",
+        "bmrcl-land-notice",
+        "bmrcl-procurement-report",
+        "bmrcl-passenger-charter"
+      ],
+      "status": "current"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+--- page 7 ---
+
+The report lists desilting and drain restoration works by ward, with separate columns for sanctioned amount, work order and completion.
+
+--- page 27 ---
+
+A work marked sanctioned has approval to proceed; it should not be read as a completed project without a completion entry.
