@@ -704,6 +704,19 @@ class CivicPost(BaseModel):
     ranking_reasons: list[str] = Field(default_factory=list)
 
 
+class PublicPostAttachment(BaseModel):
+    id: str
+    post_id: str
+    filename: str
+    content_type: str
+    size_bytes: int = Field(ge=0)
+    url: str
+
+
+class PublicPostAttachmentListResponse(BaseModel):
+    items: list[PublicPostAttachment] = Field(default_factory=list)
+
+
 class FeedResponse(BaseModel):
     items: list[CivicPost] = Field(default_factory=list)
     next_cursor: str | None = None

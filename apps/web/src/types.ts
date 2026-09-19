@@ -261,6 +261,15 @@ export type CivicPost = {
   ranking_reasons: string[]
 }
 
+export type PublicPostAttachment = {
+  id: string
+  post_id: string
+  filename: string
+  content_type: string
+  size_bytes: number
+  url: string
+}
+
 export type FeedPage = {
   items: CivicPost[]
   next_cursor: string | null

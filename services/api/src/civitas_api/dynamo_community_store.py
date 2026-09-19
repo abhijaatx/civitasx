@@ -1003,6 +1003,17 @@ class DynamoCommunityStore:
         for attachment_id in selected:
             writes.append(
                 {
+                    "Update": {
+                        "TableName": self._table.name,
+                        "Key": {"pk": f"USER#{owner_id}", "sk": f"ATTACHMENT#{attachment_id}"},
+                        "UpdateExpression": "SET #visibility=:visibility",
+                        "ExpressionAttributeNames": {"#visibility": "visibility"},
+                        "ExpressionAttributeValues": {":visibility": "public_redacted"},
+                    }
+                }
+            )
+            writes.append(
+                {
                     "Put": {
                         "TableName": self._table.name,
                         "Item": {
@@ -1029,6 +1040,32 @@ class DynamoCommunityStore:
             except (TypeError, ValueError):
                 continue
         return result
+
+    def list_post_attachments(
+        self,
+        post_id: str,
+        viewer_id: str | None = None,
+        locality: str | None = None,
+        enforce_visibility: bool = False,
+    ) -> list[Attachment]:
+        """Return only attachments explicitly included in a public snapshot."""
+
+        post = self.get_post(
+            post_id,
+            viewer_id=viewer_id,
+            locality=locality,
+            enforce_visibility=enforce_visibility,
+        )
+        del post
+        post_item = self._post_item(post_id)
+        owner_id = str(post_item["owner_id"])
+        attachments: list[Attachment] = []
+        for relationship in self._query(f"POST#{post_id}", "ATTACHMENT#"):
+            attachment_id = str(relationship.get("attachment_id") or "")
+            item = self._get(f"USER#{owner_id}", f"ATTACHMENT#{attachment_id}")
+            if item:
+                attachments.append(self._attachment_from_item(item))
+        return attachments
 
     @staticmethod
     def _decode_cursor(cursor: str | None) -> int:

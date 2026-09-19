@@ -85,6 +85,8 @@ from .models import (
     PasswordRecoveryRequest,
     PreparationApproval,
     PrepareTicketRequest,
+    PublicPostAttachment,
+    PublicPostAttachmentListResponse,
     RecordOutcomeRequest,
     RegisterRequest,
     ReportListResponse,
@@ -582,6 +584,59 @@ def feed_post_evidence(
             for item in get_community_store().list_post_evidence(post_id)
         ]
     }
+
+
+@app.get(
+    "/api/feed/{post_id}/attachments",
+    response_model=PublicPostAttachmentListResponse,
+)
+def feed_post_attachments(
+    post_id: str,
+    locality: str | None = Query(default=None, max_length=160),
+    user: User = Depends(current_user),
+) -> PublicPostAttachmentListResponse:
+    attachments = get_community_store().list_post_attachments(
+        post_id,
+        viewer_id=user.id,
+        locality=locality,
+        enforce_visibility=True,
+    )
+    return PublicPostAttachmentListResponse(
+        items=[
+            PublicPostAttachment(
+                id=attachment.id,
+                post_id=post_id,
+                filename=attachment.filename,
+                content_type=attachment.content_type,
+                size_bytes=attachment.size_bytes,
+                url=f"/api/feed/{post_id}/attachments/{attachment.id}",
+            )
+            for attachment in attachments
+        ]
+    )
+
+
+@app.get("/api/feed/{post_id}/attachments/{attachment_id}")
+def feed_post_attachment(
+    post_id: str,
+    attachment_id: str,
+    locality: str | None = Query(default=None, max_length=160),
+    user: User = Depends(current_user),
+) -> FileResponse:
+    attachments = get_community_store().list_post_attachments(
+        post_id,
+        viewer_id=user.id,
+        locality=locality,
+        enforce_visibility=True,
+    )
+    attachment = next((item for item in attachments if item.id == attachment_id), None)
+    if attachment is None:
+        raise NotFoundError("Public attachment not found")
+    return FileResponse(
+        get_community_store().attachment_path(attachment),
+        media_type=attachment.content_type,
+        filename=attachment.filename,
+    )
 
 
 @app.get("/api/feed/{post_id}/comments", response_model=CommentListResponse)

@@ -1281,6 +1281,12 @@ class LocalCommunityStore:
                        VALUES (?,?,?)""",
                     (post_id, attachment_id, now),
                 )
+            if selected_attachment_ids:
+                placeholders = ",".join("?" for _ in selected_attachment_ids)
+                conn.execute(
+                    f"UPDATE community_attachments SET visibility='public_redacted' WHERE owner_id=? AND id IN ({placeholders})",
+                    (owner_id, *selected_attachment_ids),
+                )
             conn.execute(
                 """UPDATE complaint_tickets SET public_post_id=?,visibility=?,updated_at=?
                    WHERE id=? AND owner_id=?""",
@@ -1470,6 +1476,34 @@ class LocalCommunityStore:
                 # public post unavailable.
                 continue
         return evidence
+
+    def list_post_attachments(
+        self,
+        post_id: str,
+        viewer_id: str | None = None,
+        locality: str | None = None,
+        enforce_visibility: bool = False,
+    ) -> list[Attachment]:
+        """Return only attachments explicitly included in a public snapshot."""
+
+        post = self.get_post(
+            post_id,
+            viewer_id=viewer_id,
+            locality=locality,
+            enforce_visibility=enforce_visibility,
+        )
+        del post
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT a.id,a.thread_id,a.case_id,a.owner_id,a.filename,a.content_type,
+                          a.size_bytes,a.sha256,a.storage_key,a.visibility,a.created_at
+                   FROM public_post_attachments pa
+                   JOIN community_attachments a ON a.id=pa.attachment_id
+                   WHERE pa.post_id=?
+                   ORDER BY pa.created_at ASC""",
+                (post_id,),
+            ).fetchall()
+        return [self._attachment_from_row(row) for row in rows]
 
     @staticmethod
     def _encode_feed_cursor(offset: int) -> str:

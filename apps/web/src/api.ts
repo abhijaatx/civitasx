@@ -10,6 +10,7 @@ import type {
   CivicPost,
   CivicNotification,
   FeedPage,
+  PublicPostAttachment,
   Checkpoint,
   FollowSubject,
   PreparationApproval,
@@ -276,6 +277,34 @@ export async function getFeed(params: {
   topic?: string
 } = {}): Promise<CivicPost[]> {
   return (await getFeedPage(params)).items
+}
+
+export async function getFeedPost(postId: string, locality?: string): Promise<CivicPost> {
+  const suffix = locality ? `?locality=${encodeURIComponent(locality)}` : ''
+  return request<CivicPost>(`/api/feed/${encodeURIComponent(postId)}${suffix}`)
+}
+
+export async function getFeedPostAttachments(postId: string, locality?: string): Promise<PublicPostAttachment[]> {
+  const suffix = locality ? `?locality=${encodeURIComponent(locality)}` : ''
+  const result = await request<{ items: PublicPostAttachment[] }>(`/api/feed/${encodeURIComponent(postId)}/attachments${suffix}`)
+  return result.items
+}
+
+export async function downloadFeedPostAttachment(postId: string, attachmentId: string, locality?: string): Promise<Blob> {
+  const search = new URLSearchParams()
+  if (locality) search.set('locality', locality)
+  const suffix = search.toString() ? `?${search.toString()}` : ''
+  const headers = new Headers()
+  const token = getToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  let response: Response
+  try {
+    response = await fetch(`${API_URL}/api/feed/${encodeURIComponent(postId)}/attachments/${encodeURIComponent(attachmentId)}${suffix}`, { headers })
+  } catch (error) {
+    throw error instanceof DOMException && error.name === 'AbortError' ? error : new ApiError(0, 'The civic image could not be loaded.')
+  }
+  if (!response.ok) throw new ApiError(response.status, `The civic image could not be loaded (${response.status}).`)
+  return response.blob()
 }
 
 export async function getFeedComments(postId: string): Promise<CivicComment[]> {

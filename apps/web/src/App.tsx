@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -14,16 +14,17 @@ import {
   followSubject,
   getConfig,
   getFeedPage,
+  getFeedPost,
+  getFeedPostAttachments,
+  downloadFeedPostAttachment,
   getFeedComments,
   getFeedPostEvidence,
   getAuthorities,
   getSubjectFollows,
   getMe,
   getNotifications,
-  getLiveConnectors,
   getThread,
   getThreadAttachments,
-  getTicket,
   getThreads,
   getToken,
   login,
@@ -60,13 +61,13 @@ import type {
   CivicPost,
   CivicNotification,
   MessagePart,
+  PublicPostAttachment,
   SourceEvidence,
   TicketDetail,
   TicketPreparation,
   TicketStatus,
   User,
   AuthorityRecord,
-  LiveEndpointProfile,
 } from './types'
 
 type Surface = 'feed' | 'agent'
@@ -77,6 +78,14 @@ function surfaceFromLocation(): Surface {
 
 function threadFromLocation(): string | null {
   return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('thread')
+}
+
+function feedPostFromLocation(): string | null {
+  const match = window.location.pathname.match(/^\/feed\/post\/([^/]+)$/)
+  if (match) {
+    try { return decodeURIComponent(match[1]) } catch { return match[1] }
+  }
+  return new URLSearchParams(window.location.hash.replace(/^#/, '')).get('post')
 }
 
 const LOCALITIES = ['All Bengaluru', 'Indiranagar', 'Jayanagar', 'Malleshwaram', 'Koramangala', 'Whitefield', 'Hebbal', 'HSR Layout', 'Bellandur', 'Marathahalli', 'Electronic City', 'BTM Layout', 'Yelahanka', 'Rajajinagar', 'Banashankari', 'Kalyan Nagar', 'KR Puram', 'JP Nagar', 'Nagarbhavi', 'Vijayanagar']
@@ -194,6 +203,7 @@ export default function App() {
   const [surface, setSurface] = useState<Surface>(() => surfaceFromLocation())
   const [threads, setThreads] = useState<AgentThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(() => threadFromLocation())
+  const [activePostId, setActivePostId] = useState<string | null>(() => feedPostFromLocation())
   const [agentPrompt, setAgentPrompt] = useState<string | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
   const [authNotice, setAuthNotice] = useState<string | null>(null)
@@ -260,6 +270,7 @@ export default function App() {
       setUser(null)
       setThreads([])
       setActiveThreadId(null)
+      setActivePostId(null)
       window.history.replaceState({}, '', '/')
       setAuthNotice('Your session expired. Sign in again to continue; local drafts remain on this device.')
     }
@@ -280,17 +291,19 @@ export default function App() {
     setUser(null)
     setThreads([])
     setActiveThreadId(null)
+    setActivePostId(null)
     window.history.replaceState({}, '', '/')
     setAuthNotice(signOutWarning ? `${signOutWarning} You are signed out on this device.` : null)
   }
 
   const navigateSurface = (nextSurface: Surface) => {
     setSurface(nextSurface)
+    setActivePostId(null)
     const nextPath = nextSurface === 'agent' ? '/agent' : '/feed'
     const currentHash = window.location.hash
     const nextHash = nextSurface === 'agent'
       ? (currentHash.startsWith('#thread=') ? currentHash : '')
-      : (currentHash.startsWith('#post=') ? currentHash : '')
+      : ''
     if (window.location.pathname !== nextPath || currentHash !== nextHash) window.history.pushState({}, '', `${nextPath}${window.location.search}${nextHash}`)
   }
 
@@ -298,6 +311,7 @@ export default function App() {
     const handleNavigation = () => {
       setSurface(surfaceFromLocation())
       setActiveThreadId(threadFromLocation())
+      setActivePostId(feedPostFromLocation())
     }
     window.addEventListener('popstate', handleNavigation)
     return () => window.removeEventListener('popstate', handleNavigation)
@@ -328,12 +342,12 @@ export default function App() {
   if (!user || !config || !capabilities) return <AuthScreen config={config} onAuthenticated={handleAuth} notice={authNotice} />
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${surface === 'agent' ? 'agent-surface' : ''}`}>
       <ScoreRail surface={surface} onSurface={navigateSurface} capabilities={config.capabilities} />
       <main className="app-main">
         <TopBar user={user} surface={surface} onSurface={navigateSurface} onSignOut={() => void handleSignOut()} />
         {surface === 'feed' ? capabilities.feed ? (
-          <FeedView user={user} capabilities={capabilities} onOpenAgent={(prompt) => { navigateSurface('agent'); setAgentPrompt(prompt ?? null); setActiveThreadId(null) }} />
+          <FeedView user={user} capabilities={capabilities} postId={activePostId} onOpenPost={(postId) => { setSurface('feed'); setActivePostId(postId); window.history.pushState({}, '', `/feed/post/${encodeURIComponent(postId)}${window.location.search}`) }} onClosePost={() => { setActivePostId(null); window.history.replaceState({}, '', `/feed${window.location.search}`) }} onOpenAgent={(prompt) => { navigateSurface('agent'); setAgentPrompt(prompt ?? null); setActiveThreadId(null) }} />
         ) : <CapabilityUnavailable label="The public Feed is not enabled for this deployment." /> : capabilities.agent ? (
           <AgentView
             capabilities={capabilities}
@@ -538,7 +552,7 @@ function TopBar({ user, surface, onSurface, onSignOut }: { user: User; surface: 
     try {
       if (!item.read) { await markNotification(item.id); setNotifications((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, read: true } : candidate)) }
       setInboxError(null)
-      if (item.post_id) { onSurface('feed'); window.history.pushState({}, '', `#post=${encodeURIComponent(item.post_id)}`); window.dispatchEvent(new PopStateEvent('popstate')); setShowInbox(false) }
+      if (item.post_id) { onSurface('feed'); window.history.pushState({}, '', `/feed/post/${encodeURIComponent(item.post_id)}${window.location.search}`); window.dispatchEvent(new PopStateEvent('popstate')); setShowInbox(false) }
     } catch (error) { setInboxError(error instanceof Error ? error.message : 'Could not update this notification') }
   }
   const markAllRead = async () => {
@@ -621,7 +635,7 @@ function PrivacyPreferences({ userId, onActivityNotificationsChange }: { userId:
   return <div className="privacy-preferences" role="group" aria-label="Privacy and memory preferences"><p className="eyebrow">Your local memory</p><p className="muted">Saved here on this device. Turn off remembering to keep these choices only for this session.</p>{storageError && <p className="inline-error" role="alert">{storageError}</p>}<label>Default locality<select value={locality} onChange={(event) => setLocality(event.target.value)}><option value="">Ask each time</option>{LOCALITIES.filter((item) => item !== 'All Bengaluru').map((item) => <option key={item}>{item}</option>)}</select></label><label>Public display name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Use a pseudonym" /></label><label className="checkbox-label"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Remember these choices</label><label className="checkbox-label"><input type="checkbox" checked={activityNotifications} onChange={(event) => setActivityNotifications(event.target.checked)} /> Activity notifications</label><div className="privacy-actions"><button onClick={clear}>Clear saved choices</button><button onClick={() => setOpen(false)}>Cancel</button><button className="button-dark" onClick={save}>Save</button></div></div>
 }
 
-function FeedView({ user, capabilities, onOpenAgent }: { user: User; capabilities: AppConfig['capabilities']; onOpenAgent: (prompt?: string) => void }) {
+function FeedView({ user, capabilities, postId, onOpenPost, onClosePost, onOpenAgent }: { user: User; capabilities: AppConfig['capabilities']; postId: string | null; onOpenPost: (postId: string) => void; onClosePost: () => void; onOpenAgent: (prompt?: string) => void }) {
   const [sort, setSort] = useState<'recent' | 'popular' | 'nearby' | 'following' | 'recommended'>(() => readFeedPreferences(user.id).sort ?? 'recommended')
   const [locality, setLocality] = useState(() => readFeedPreferences(user.id).locality || readProfileLocality(user.id) || '')
   const [statusFilter, setStatusFilter] = useState<TicketStatus | ''>('')
@@ -636,7 +650,9 @@ function FeedView({ user, capabilities, onOpenAgent }: { user: User; capabilitie
   const [loadingMore, setLoadingMore] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selectedPost, setSelectedPost] = useState<CivicPost | null>(null)
+  const [detailPost, setDetailPost] = useState<CivicPost | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
   const [showPrivacyHint, setShowPrivacyHint] = useState(() => {
     return !Boolean(readStoredProfilePreferences(user.id).onboardingSeen)
   })
@@ -668,14 +684,29 @@ function FeedView({ user, capabilities, onOpenAgent }: { user: User; capabilitie
     return () => window.clearTimeout(handle)
   }, [topicInput])
   useEffect(() => {
-    const openFromHash = () => {
-      const id = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('post')
-      setSelectedPost(id ? posts.find((post) => post.id === id) ?? null : null)
+    if (!postId) {
+      setDetailPost(null)
+      setDetailLoading(false)
+      setDetailError(null)
+      return
     }
-    openFromHash()
-    window.addEventListener('popstate', openFromHash)
-    return () => window.removeEventListener('popstate', openFromHash)
-  }, [posts])
+    let active = true
+    const cached = posts.find((post) => post.id === postId)
+    if (cached) { setDetailPost(cached); setDetailLoading(false) }
+    else { setDetailPost(null); setDetailLoading(true) }
+    setDetailError(null)
+    void getFeedPost(postId, locality || undefined).then((next) => {
+      if (!active) return
+      setDetailPost(next)
+      setDetailLoading(false)
+    }).catch((nextError) => {
+      if (!active) return
+      if (!cached) setDetailPost(null)
+      setDetailLoading(false)
+      setDetailError(nextError instanceof Error ? nextError.message : 'Could not open this civic post')
+    })
+    return () => { active = false }
+  }, [locality, postId])
   useEffect(() => {
     const profile = readStoredProfilePreferences(user.id)
     try {
@@ -720,55 +751,130 @@ function FeedView({ user, capabilities, onOpenAgent }: { user: User; capabilitie
     }
   }
   const subjectLabel = topic ? 'topic' : authorityFilter ? 'authority' : ''
-  const updatePost = (postId: string, patch: Partial<CivicPost>) => setPosts((current) => current.map((post) => post.id === postId ? { ...post, ...patch } : post))
-  const openPost = (post: CivicPost) => { setSelectedPost(post); window.history.pushState({}, '', `#post=${encodeURIComponent(post.id)}`) }
-  const closePost = () => { setSelectedPost(null); window.history.replaceState({}, '', window.location.pathname + window.location.search) }
-  const nearbyExplanation = locality ? `Nearby uses your selected locality (${locality}) and citywide posts.` : 'Nearby uses the locality you select; no precise location is collected.'
-  return <div className="feed-view"><div className="demo-banner" role="note"><strong>Sample civic records</strong><span>Seeded for this pilot · not government records.</span></div>{showPrivacyHint && <div className="privacy-onboarding" role="status"><span><strong>Make this workspace yours.</strong> Set your locality, display name, and activity preferences in Account.</span><button onClick={() => { setShowPrivacyHint(false); const current = readStoredProfilePreferences(user.id); try { if (current.remember === false) window.sessionStorage.setItem(`civitas.profile.preferences.${user.id}`, JSON.stringify({ ...current, onboardingSeen: true })); else window.localStorage.setItem(`civitas.profile.preferences.${user.id}`, JSON.stringify({ ...current, onboardingSeen: true })) } catch { /* best effort */ } }}>Got it</button></div>}<section className="feed-hero"><div><p className="eyebrow">Bengaluru / public civic feed</p><h1>What needs<br /><em>attention?</em></h1><p className="feed-lede">Public issues, evidence, and community context. Official submission is always reviewed separately.</p></div><div className="feed-index"><span>OPEN SIGNALS</span><strong>{String(posts.length).padStart(2, '0')}</strong><span>IN THIS VIEW</span></div></section><div className="feed-toolbar"><div className="feed-tabs" aria-label="Feed sort"><button type="button" aria-pressed={sort === 'recommended'} className={sort === 'recommended' ? 'active' : ''} onClick={() => setSort('recommended')}>For you</button><button type="button" aria-pressed={sort === 'recent'} className={sort === 'recent' ? 'active' : ''} onClick={() => setSort('recent')}>Recent</button><button type="button" aria-pressed={sort === 'nearby'} className={sort === 'nearby' ? 'active' : ''} disabled={!locality} onClick={() => setSort('nearby')} aria-label={locality ? 'Nearby' : 'Nearby, select a locality first'}>Nearby</button><button type="button" aria-pressed={sort === 'following'} className={sort === 'following' ? 'active' : ''} onClick={() => setSort('following')}>Following</button><button type="button" aria-pressed={sort === 'popular'} className={sort === 'popular' ? 'active' : ''} onClick={() => setSort('popular')}>Popular</button></div><div className="feed-filters"><label className="sr-only" htmlFor="locality-filter">Locality</label><select id="locality-filter" value={locality || 'All Bengaluru'} onChange={(event) => { setLocality(event.target.value === 'All Bengaluru' ? '' : event.target.value); setLocalityFollowing(false) }}>{LOCALITIES.map((item) => <option key={item}>{item}</option>)}</select><button className="filter-follow" disabled={!locality} onClick={() => void toggleLocalityFollow()}>{localityFollowing ? 'Following locality' : 'Follow locality'}</button><label className="sr-only" htmlFor="status-filter">Status</label><select id="status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TicketStatus | '')}><option value="">All statuses</option>{TICKET_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><label className="sr-only" htmlFor="authority-filter">Authority</label><select id="authority-filter" value={authorityFilter} onChange={(event) => { setAuthorityFilter(event.target.value); setSubjectFollowing(false) }}><option value="">All authorities</option>{authorities.map((authority) => <option key={authority.authority_id} value={authority.authority_id}>{authority.short_name || authority.name}</option>)}</select><label className="sr-only" htmlFor="topic-filter">Search Feed</label><input id="topic-filter" value={topicInput} onChange={(event) => { setTopicInput(event.target.value); setSubjectFollowing(false) }} placeholder="Search issues" />{subjectLabel && <button className="filter-follow" onClick={() => void followSubjectFilter()}>{subjectFollowing ? `Following ${subjectLabel}` : `Follow ${subjectLabel}`}</button>}</div></div><p className="feed-sort-help">{sort === 'recommended' ? 'For you: locality, follows, fresh discussion, evidence, and unresolved issues.' : sort === 'nearby' ? nearbyExplanation : sort === 'popular' ? 'Popular: votes and discussion, with official status preserved.' : sort === 'following' ? 'Following: people, authorities, and subjects you follow.' : 'Recent: chronological.'}</p><div className="feed-create"><div><span className="feed-create-mark" aria-hidden="true">+</span><strong>Have an issue to report?</strong><span>Describe what happened. Attach photos or documents.</span></div><button className="button button-dark" disabled={!capabilities.agent} onClick={() => onOpenAgent()}>{capabilities.agent ? 'Open private Agent' : 'Agent unavailable'} <span aria-hidden="true">↗</span></button></div>{error && <div className="inline-error" role="alert">{error}</div>}{loading ? <div className="feed-loading"><div className="loading-mark small" aria-hidden="true"><span /><span /><span /></div><span>Loading civic signals…</span></div> : posts.length === 0 ? <div className="empty-cases"><div className="empty-score"><span /><span /><span /></div><div><h3>No public signals match this view.</h3><p>Open Agent to create the first reviewed ticket.</p></div></div> : <><div className="feed-list">{posts.map((post) => <FeedPost key={post.id} post={post} agentEnabled={capabilities.agent} onUpdate={(patch) => updatePost(post.id, patch)} onOpenDetail={() => openPost(post)} onOpenAgent={() => onOpenAgent(`Ticket ${post.civitas_ticket_id}: ${post.title}\n\n${post.body}`)} />)}</div>{nextCursor && <button className="button button-outline feed-load-more" onClick={() => void loadMore()} disabled={loadingMore}>{loadingMore ? 'Loading more…' : 'Load more civic signals'}</button>}</>}<p className="feed-footnote">Ticket IDs track CivitasX cases; they become government references only after connector-confirmed submission.</p>{selectedPost && <PostDetailDialog post={selectedPost} locality={locality || undefined} researchEnabled={capabilities.research} onClose={closePost} onOpenAgent={onOpenAgent} />}</div>
-}
-
-function PostDetailDialog({ post, locality, researchEnabled, onClose, onOpenAgent }: { post: CivicPost; locality?: string; researchEnabled: boolean; onClose: () => void; onOpenAgent: (prompt?: string) => void }) {
-  const [evidence, setEvidence] = useState<SourceEvidence[]>([])
-  const [loading, setLoading] = useState(true)
-  const [evidenceError, setEvidenceError] = useState<string | null>(null)
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'unavailable'>('idle')
-  const dialogRef = useRef<HTMLElement | null>(null)
-  const closeRef = useRef<HTMLButtonElement | null>(null)
-  const previousFocus = useRef<HTMLElement | null>(null)
-  useEffect(() => {
-    if (!researchEnabled) { setEvidence([]); setEvidenceError(null); setLoading(false); return }
-    let alive = true
-    setEvidenceError(null)
-    setLoading(true)
-    void getFeedPostEvidence(post.id, locality || post.locality || undefined).then((items) => { if (alive) setEvidence(items) }).catch((error) => { if (alive) { setEvidence([]); setEvidenceError(error instanceof Error ? error.message : 'Evidence is temporarily unavailable') } }).finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
-  }, [locality, post.id, post.locality, researchEnabled])
-  useLayoutEffect(() => {
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    closeRef.current?.focus()
-    const close = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); onClose(); return }
-      if (event.key !== 'Tab' || !dialogRef.current) return
-      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>('button, input, textarea, select, a[href], summary')).filter((item) => !item.hasAttribute('disabled'))
-      if (!focusable.length) return
-      const first = focusable[0]; const last = focusable[focusable.length - 1]
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
-    }
-    window.addEventListener('keydown', close)
-    return () => { window.removeEventListener('keydown', close); document.body.style.overflow = previousOverflow; previousFocus.current?.focus() }
-  }, [onClose])
-  const copyLink = async () => {
-    try { await copyText(window.location.href); setCopyState('copied') }
-    catch { setCopyState('unavailable') }
+  const updatePost = (postId: string, patch: Partial<CivicPost>) => {
+    setPosts((current) => current.map((post) => post.id === postId ? { ...post, ...patch } : post))
+    setDetailPost((current) => current?.id === postId ? { ...current, ...patch } : current)
   }
-  return <div className="detail-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><article ref={dialogRef} className="post-detail" role="dialog" aria-modal="true" aria-labelledby={`post-detail-${post.id}`} tabIndex={-1}><button ref={closeRef} className="drawer-close" onClick={onClose} aria-label="Close post detail">×</button><div className="post-detail-top"><span className="eyebrow">{post.is_demo ? 'Sample civic signal' : 'Public civic signal'}</span><span className="post-ticket">{post.civitas_ticket_id}</span></div><h2 id={`post-detail-${post.id}`}>{post.title}</h2><p>{post.body}</p><div className="post-meta"><span>{post.author_name}</span><span>{post.locality ?? 'Bengaluru'}</span>{post.authority_name && <span>{post.authority_name}</span>}<span>{statusLabel(post.status)}</span></div><section className="detail-evidence"><div className="sources-heading"><span className="eyebrow">Evidence</span><span>{!researchEnabled ? 'Unavailable' : loading ? 'Checking…' : `${evidence.length} ${evidence.length === 1 ? 'source' : 'sources'}`}</span></div>{!researchEnabled ? <p className="muted">Evidence lookup is not enabled in this deployment.</p> : loading ? <p className="muted">Loading source metadata…</p> : evidenceError ? <p className="inline-error" role="alert">{evidenceError}. Try again later; no evidence claim was made.</p> : evidence.length === 0 ? <p className="muted">No source passages are attached to this public snapshot yet.</p> : evidence.map((source) => <details key={source.source_id}><summary><strong>{source.title}</strong><small>{source.authority} · page {source.page ?? '—'}</small></summary><p>{source.passage || 'No extractable passage was available.'}</p><div className="source-provenance"><span>Status: {source.status}</span><span>Retrieved: {source.retrieved_at ? formatDate(source.retrieved_at) : 'unknown'}</span><span>Language: {source.translation_language ?? 'English'}</span>{source.url && <a href={source.url} target="_blank" rel="noreferrer">Open official source ↗</a>}</div></details>)}</section><div className="detail-actions"><button className="button button-dark" onClick={() => onOpenAgent(`Ticket ${post.civitas_ticket_id}: ${post.title}\n\n${post.body}`)}>Ask Agent about this</button><button className="button button-outline" onClick={() => void copyLink()}>Copy link</button>{copyState !== 'idle' && <span className={copyState === 'copied' ? 'copy-feedback success' : 'copy-feedback error'} role={copyState === 'copied' ? 'status' : 'alert'}>{copyState === 'copied' ? 'Link copied.' : 'Copy is unavailable here.'}</span>}</div></article></div>
+  const nearbyExplanation = locality ? `Nearby uses your selected locality (${locality}) and citywide posts.` : 'Nearby uses the locality you select; no precise location is collected.'
+  if (postId) return <PostDetailPage post={detailPost} loading={detailLoading} error={detailError} locality={locality || undefined} researchEnabled={capabilities.research} agentEnabled={capabilities.agent} onBack={onClosePost} onUpdate={updatePost} onOpenAgent={onOpenAgent} />
+  return <div className="feed-view"><div className="demo-banner" role="note"><strong>Sample civic records</strong><span>Seeded for this pilot · not government records.</span></div>{showPrivacyHint && <div className="privacy-onboarding" role="status"><span><strong>Make this workspace yours.</strong> Set your locality, display name, and activity preferences in Account.</span><button onClick={() => { setShowPrivacyHint(false); const current = readStoredProfilePreferences(user.id); try { if (current.remember === false) window.sessionStorage.setItem(`civitas.profile.preferences.${user.id}`, JSON.stringify({ ...current, onboardingSeen: true })); else window.localStorage.setItem(`civitas.profile.preferences.${user.id}`, JSON.stringify({ ...current, onboardingSeen: true })) } catch { /* best effort */ } }}>Got it</button></div>}<section className="feed-hero"><div><p className="eyebrow">Bengaluru / public civic feed</p><h1>What needs<br /><em>attention?</em></h1><p className="feed-lede">Public issues, evidence, and community context. Official submission is always reviewed separately.</p></div><div className="feed-index"><span>OPEN SIGNALS</span><strong>{String(posts.length).padStart(2, '0')}</strong><span>IN THIS VIEW</span></div></section><div className="feed-toolbar"><div className="feed-tabs" aria-label="Feed sort"><button type="button" aria-pressed={sort === 'recommended'} className={sort === 'recommended' ? 'active' : ''} onClick={() => setSort('recommended')}>For you</button><button type="button" aria-pressed={sort === 'recent'} className={sort === 'recent' ? 'active' : ''} onClick={() => setSort('recent')}>Recent</button><button type="button" aria-pressed={sort === 'nearby'} className={sort === 'nearby' ? 'active' : ''} disabled={!locality} onClick={() => setSort('nearby')} aria-label={locality ? 'Nearby' : 'Nearby, select a locality first'}>Nearby</button><button type="button" aria-pressed={sort === 'following'} className={sort === 'following' ? 'active' : ''} onClick={() => setSort('following')}>Following</button><button type="button" aria-pressed={sort === 'popular'} className={sort === 'popular' ? 'active' : ''} onClick={() => setSort('popular')}>Popular</button></div><div className="feed-filters"><label className="sr-only" htmlFor="locality-filter">Locality</label><select id="locality-filter" value={locality || 'All Bengaluru'} onChange={(event) => { setLocality(event.target.value === 'All Bengaluru' ? '' : event.target.value); setLocalityFollowing(false) }}>{LOCALITIES.map((item) => <option key={item}>{item}</option>)}</select><button className="filter-follow" disabled={!locality} onClick={() => void toggleLocalityFollow()}>{localityFollowing ? 'Following locality' : 'Follow locality'}</button><label className="sr-only" htmlFor="status-filter">Status</label><select id="status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TicketStatus | '')}><option value="">All statuses</option>{TICKET_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><label className="sr-only" htmlFor="authority-filter">Authority</label><select id="authority-filter" value={authorityFilter} onChange={(event) => { setAuthorityFilter(event.target.value); setSubjectFollowing(false) }}><option value="">All authorities</option>{authorities.map((authority) => <option key={authority.authority_id} value={authority.authority_id}>{authority.short_name || authority.name}</option>)}</select><label className="sr-only" htmlFor="topic-filter">Search Feed</label><input id="topic-filter" value={topicInput} onChange={(event) => { setTopicInput(event.target.value); setSubjectFollowing(false) }} placeholder="Search issues" />{subjectLabel && <button className="filter-follow" onClick={() => void followSubjectFilter()}>{subjectFollowing ? `Following ${subjectLabel}` : `Follow ${subjectLabel}`}</button>}</div></div><p className="feed-sort-help">{sort === 'recommended' ? 'For you: locality, follows, fresh discussion, evidence, and unresolved issues.' : sort === 'nearby' ? nearbyExplanation : sort === 'popular' ? 'Popular: votes and discussion, with official status preserved.' : sort === 'following' ? 'Following: people, authorities, and subjects you follow.' : 'Recent: chronological.'}</p><div className="feed-create"><div><span className="feed-create-mark" aria-hidden="true">+</span><strong>Have an issue to report?</strong><span>Describe what happened. Attach photos or documents.</span></div><button className="button button-dark" disabled={!capabilities.agent} onClick={() => onOpenAgent()}>{capabilities.agent ? 'Open private Agent' : 'Agent unavailable'} <span aria-hidden="true">↗</span></button></div>{error && <div className="inline-error" role="alert">{error}</div>}{loading ? <div className="feed-loading"><div className="loading-mark small" aria-hidden="true"><span /><span /><span /></div><span>Loading civic signals…</span></div> : posts.length === 0 ? <div className="empty-cases"><div className="empty-score"><span /><span /><span /></div><div><h3>No public signals match this view.</h3><p>Open Agent to create the first reviewed ticket.</p></div></div> : <><div className="feed-list">{posts.map((post) => <FeedPost key={post.id} post={post} agentEnabled={capabilities.agent} onUpdate={(patch) => updatePost(post.id, patch)} onOpenDetail={() => onOpenPost(post.id)} onOpenAgent={() => onOpenAgent(`Ticket ${post.civitas_ticket_id}: ${post.title}\n\n${post.body}`)} />)}</div>{nextCursor && <button className="button button-outline feed-load-more" onClick={() => void loadMore()} disabled={loadingMore}>{loadingMore ? 'Loading more…' : 'Load more civic signals'}</button>}</>}<p className="feed-footnote">Ticket IDs track CivitasX cases; they become government references only after connector-confirmed submission.</p></div>
 }
 
-function FeedPost({ post, onUpdate, onOpenDetail, onOpenAgent, agentEnabled = true }: { post: CivicPost; onUpdate: (patch: Partial<CivicPost>) => void; onOpenDetail: () => void; onOpenAgent: () => void; agentEnabled?: boolean }) {
-  const [commentsOpen, setCommentsOpen] = useState(false)
+function PostDetailPage({ post, loading, error, locality, researchEnabled, agentEnabled, onBack, onUpdate, onOpenAgent }: { post: CivicPost | null; loading: boolean; error: string | null; locality?: string; researchEnabled: boolean; agentEnabled: boolean; onBack: () => void; onUpdate: (postId: string, patch: Partial<CivicPost>) => void; onOpenAgent: (prompt?: string) => void }) {
+  const [evidence, setEvidence] = useState<SourceEvidence[]>([])
+  const [evidenceLoading, setEvidenceLoading] = useState(false)
+  const [evidenceError, setEvidenceError] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<PublicPostAttachment[]>([])
+  const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({})
+  const [attachmentLoading, setAttachmentLoading] = useState(false)
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!post) return
+    const previousTitle = document.title
+    document.title = `${post.title} — CivitasX`
+    return () => { document.title = previousTitle }
+  }, [post?.id, post?.title])
+
+  useEffect(() => {
+    if (!post || !researchEnabled) {
+      setEvidence([])
+      setEvidenceLoading(false)
+      setEvidenceError(null)
+      return
+    }
+    let active = true
+    setEvidenceLoading(true)
+    setEvidenceError(null)
+    void getFeedPostEvidence(post.id, locality || post.locality || undefined).then((items) => {
+      if (active) setEvidence(items)
+    }).catch((nextError) => {
+      if (active) { setEvidence([]); setEvidenceError(nextError instanceof Error ? nextError.message : 'Evidence is temporarily unavailable') }
+    }).finally(() => { if (active) setEvidenceLoading(false) })
+    return () => { active = false }
+  }, [locality, post?.id, post?.locality, researchEnabled])
+
+  useEffect(() => {
+    if (!post) {
+      setAttachments([])
+      setAttachmentLoading(false)
+      setAttachmentError(null)
+      setAttachmentUrls({})
+      return
+    }
+    let active = true
+    let objectUrls: string[] = []
+    setAttachmentLoading(true)
+    setAttachmentError(null)
+    setAttachments([])
+    setAttachmentUrls({})
+    void getFeedPostAttachments(post.id, locality || post.locality || undefined).then(async (items) => {
+      if (!active) return
+      setAttachments(items)
+      const imageItems = items.filter((item) => item.content_type.startsWith('image/'))
+      const loaded = await Promise.allSettled(imageItems.map(async (item) => {
+        const blob = await downloadFeedPostAttachment(post.id, item.id, locality || post.locality || undefined)
+        return [item.id, URL.createObjectURL(blob)] as const
+      }))
+      const urls: Record<string, string> = {}
+      for (const result of loaded) if (result.status === 'fulfilled') urls[result.value[0]] = result.value[1]
+      objectUrls = Object.values(urls)
+      if (!active) { objectUrls.forEach((url) => URL.revokeObjectURL(url)); return }
+      setAttachmentUrls(urls)
+    }).catch((nextError) => {
+      if (active) { setAttachments([]); setAttachmentError(nextError instanceof Error ? nextError.message : 'Public attachments are temporarily unavailable') }
+    }).finally(() => { if (active) setAttachmentLoading(false) })
+    return () => { active = false; objectUrls.forEach((url) => URL.revokeObjectURL(url)) }
+  }, [locality, post?.id, post?.locality])
+
+  const imageAttachments = attachments.filter((item) => item.content_type.startsWith('image/'))
+  const otherAttachments = attachments.filter((item) => !item.content_type.startsWith('image/'))
+  return (
+    <main className="post-detail-page">
+      <header className="post-detail-page-header">
+        <button type="button" className="post-back" onClick={onBack}><span aria-hidden="true">←</span> Back to civic feed</button>
+        <span className="post-route-label">Public civic signal{post ? ' · ' + post.civitas_ticket_id : ''}</span>
+      </header>
+      {loading && !post ? (
+        <div className="post-detail-loading" role="status"><div className="loading-mark small" aria-hidden="true"><span /><span /><span /></div><p>Opening this civic record…</p></div>
+      ) : error && !post ? (
+        <div className="post-detail-error" role="alert"><strong>This civic record could not be opened.</strong><p>{error}</p><button type="button" className="button button-outline" onClick={onBack}>Return to feed</button></div>
+      ) : post ? (
+        <div className="post-detail-layout">
+          <section className="post-detail-main">
+            <FeedPost
+              post={post}
+              agentEnabled={agentEnabled}
+              commentsInitiallyOpen
+              onUpdate={(patch) => onUpdate(post.id, patch)}
+              onOpenDetail={onBack}
+              onOpenAgent={() => onOpenAgent('Ticket ' + post.civitas_ticket_id + ': ' + post.title + '\n\n' + post.body)}
+            />
+            <section className="post-detail-section post-detail-attachments">
+              <div className="post-detail-section-heading"><div><p className="eyebrow">Images & files</p><h2>What residents attached</h2></div><span>{attachmentLoading ? 'Loading…' : attachments.length + ' ' + (attachments.length === 1 ? 'item' : 'items')}</span></div>
+              {attachmentError ? <p className="inline-error" role="alert">{attachmentError}</p> : attachmentLoading ? <p className="muted">Loading public attachments…</p> : imageAttachments.length === 0 && otherAttachments.length === 0 ? <p className="muted">No public images or files are attached to this civic snapshot.</p> : <>
+                {imageAttachments.length > 0 && <div className="post-image-grid">{imageAttachments.map((attachment) => <figure key={attachment.id} className="post-image-card">{attachmentUrls[attachment.id] ? <img src={attachmentUrls[attachment.id]} alt={post.title + ' — ' + attachment.filename} /> : <div className="post-image-placeholder" role="status">Loading image…</div>}<figcaption>{attachment.filename}</figcaption></figure>)}</div>}
+                {otherAttachments.length > 0 && <div className="post-file-list">{otherAttachments.map((attachment) => <div key={attachment.id}><span aria-hidden="true">↳</span><span>{attachment.filename}</span><small>{attachment.content_type} · {Math.ceil(attachment.size_bytes / 1024)} KB</small></div>)}</div>}
+              </>}
+            </section>
+            <section className="post-detail-section post-detail-evidence">
+              <div className="post-detail-section-heading"><div><p className="eyebrow">Evidence trail</p><h2>Sources captured with this record</h2></div><span>{!researchEnabled ? 'Unavailable' : evidenceLoading ? 'Checking…' : evidence.length + ' ' + (evidence.length === 1 ? 'source' : 'sources')}</span></div>
+              {!researchEnabled ? <p className="muted">Evidence lookup is not enabled in this deployment.</p> : evidenceLoading ? <p className="muted">Loading source metadata…</p> : evidenceError ? <p className="inline-error" role="alert">{evidenceError}. No evidence claim was made.</p> : evidence.length === 0 ? <p className="muted">No source passages are attached to this public snapshot yet.</p> : <div className="post-source-list">{evidence.map((source) => <details key={source.source_id}><summary><strong>{source.title}</strong><small>{source.authority} · page {source.page ?? '—'}</small></summary><p>{source.passage || 'No extractable passage was available.'}</p><div className="source-provenance"><span>Status: {source.status}</span><span>Retrieved: {source.retrieved_at ? formatDate(source.retrieved_at) : 'unknown'}</span><span>Language: {source.translation_language ?? 'English'}</span>{source.url && <a href={source.url} target="_blank" rel="noreferrer">Open official source ↗</a>}</div></details>)}</div>}
+            </section>
+          </section>
+          <aside className="post-detail-aside">
+            <div className="post-detail-aside-card"><p className="eyebrow">A civic record, not a promise</p><h2>Read the evidence. Add local context.</h2><p>This page keeps the public snapshot, discussion, and source trail together. Official submission remains a separate reviewed step.</p><button type="button" className="button button-dark button-full" disabled={!agentEnabled} onClick={() => onOpenAgent('Ticket ' + post.civitas_ticket_id + ': ' + post.title + '\n\n' + post.body)}>{agentEnabled ? 'Ask Agent about this' : 'Agent unavailable'} <span aria-hidden="true">↗</span></button></div>
+            <div className="post-detail-aside-note"><span className="eyebrow">Ticket ID</span><strong>{post.civitas_ticket_id}</strong><span>{post.locality ?? 'Bengaluru'} · {statusLabel(post.status)}</span><small>Ticket IDs track CivitasX cases; they become government references only after connector-confirmed submission.</small></div>
+          </aside>
+        </div>
+      ) : null}
+    </main>
+  )
+}
+
+
+function FeedPost({ post, onUpdate, onOpenDetail, onOpenAgent, agentEnabled = true, commentsInitiallyOpen = false }: { post: CivicPost; onUpdate: (patch: Partial<CivicPost>) => void; onOpenDetail: () => void; onOpenAgent: () => void; agentEnabled?: boolean; commentsInitiallyOpen?: boolean }) {
+  const [commentsOpen, setCommentsOpen] = useState(commentsInitiallyOpen)
   const [comments, setComments] = useState<CivicComment[]>([])
   const [comment, setComment] = useState('')
   const [replyTo, setReplyTo] = useState<CivicComment | null>(null)
@@ -782,6 +888,13 @@ function FeedPost({ post, onUpdate, onOpenDetail, onOpenAgent, agentEnabled = tr
   const moreRef = useRef<HTMLSpanElement | null>(null)
   const statusTone = post.status === 'resolved' ? 'resolved' : post.status === 'not_solved' ? 'attention' : post.status === 'in_progress' ? 'working' : 'neutral'
   const rootComments = comments.filter((item) => !item.parent_id || !comments.some((parent) => parent.id === item.parent_id))
+  const loadComments = useCallback(async () => {
+    try { setComments(await getFeedComments(post.id)) }
+    catch (error) { setFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'Could not load comments' }) }
+  }, [post.id])
+  useEffect(() => {
+    if (commentsInitiallyOpen) void loadComments()
+  }, [commentsInitiallyOpen, loadComments])
   useEffect(() => {
     if (!showMore) return
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setShowMore(false) }
@@ -797,9 +910,7 @@ function FeedPost({ post, onUpdate, onOpenDetail, onOpenAgent, agentEnabled = tr
   }
   const toggleComments = async () => {
     setCommentsOpen((current) => !current)
-    if (!commentsOpen) {
-      try { setComments(await getFeedComments(post.id)) } catch (error) { setFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'Could not load comments' }) }
-    }
+    if (!commentsOpen) void loadComments()
   }
   const submitComment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -866,7 +977,6 @@ function AgentView({ capabilities, ownerId, ownerName, threads, activeThreadId, 
   const [prefill, setPrefill] = useState('')
   const [ticket, setTicket] = useState<TicketDetail | null>(null)
   const [ticketAction, setTicketAction] = useState<Record<string, unknown> | null>(null)
-  const [liveSources, setLiveSources] = useState<LiveEndpointProfile[]>([])
   const [threadQuery, setThreadQuery] = useState('')
   const [agentError, setAgentError] = useState<string | null>(null)
   const [creatingThread, setCreatingThread] = useState(false)
@@ -890,10 +1000,6 @@ function AgentView({ capabilities, ownerId, ownerName, threads, activeThreadId, 
     }
     if (threads.length > 0) { void openThread(threads[0].id) }
   }, [activeThreadId, creatingThread, detail?.thread.id, initialPrompt, loading, openThread, threads])
-  useEffect(() => {
-    if (!capabilities.live_sources) { setLiveSources([]); return }
-    void getLiveConnectors().then(setLiveSources).catch(() => setLiveSources([]))
-  }, [capabilities.live_sources])
   const newThread = async (goal = 'Explore a Bengaluru civic issue'): Promise<boolean> => {
     if (creatingThread) return false
     setCreatingThread(true); setAgentError(null)
@@ -907,9 +1013,6 @@ function AgentView({ capabilities, ownerId, ownerName, threads, activeThreadId, 
     } catch (nextError) { setAgentError(nextError instanceof Error ? nextError.message : 'Could not create a conversation') }
     finally { setCreatingThread(false) }
     return false
-  }
-  const openTicket = async (ticketId: string) => {
-    try { setTicket(await getTicket(ticketId)) } catch (nextError) { setAgentError(nextError instanceof Error ? nextError.message : 'Could not open this ticket') }
   }
   const handleAgentAction = async (action: Record<string, unknown>) => {
     if (action.action === 'workspace_change_approval') {
@@ -957,12 +1060,11 @@ function AgentView({ capabilities, ownerId, ownerName, threads, activeThreadId, 
         <button className="button button-lime button-full thread-new-button" disabled={creatingThread} onClick={() => void newThread()}>New conversation <span aria-hidden="true">↗</span></button>
         <div className="thread-filters"><label className="sr-only" htmlFor="thread-search">Search conversations</label><input id="thread-search" className="thread-search" value={threadQuery} onChange={(event) => setThreadQuery(event.target.value)} placeholder="Search conversations" /><label className="sr-only" htmlFor="thread-sort">Sort conversations</label><select id="thread-sort" value={threadSort} onChange={(event) => setThreadSort(event.target.value as 'recent' | 'title')}><option value="recent">Recent</option><option value="title">A–Z</option></select></div>
         <div className="thread-list">{visibleThreads.length === 0 ? <p className="muted">{threadQuery ? 'No matching conversations.' : 'Your conversations will appear here.'}</p> : visibleThreads.map((thread) => <ThreadRow key={thread.id} thread={thread} active={detail?.thread.id === thread.id} onOpen={() => void openThread(thread.id)} onRefresh={onThreadsChanged} onRenamed={(next) => { if (detail?.thread.id === thread.id) setDetail(next) }} onArchived={() => { if (detail?.thread.id === thread.id) { setDetail(null); onSelectThread(null) } }} />)}</div>
-        <div className="thread-sidebar-note"><span className="dot dot-lime" /> Local evidence workspace.{capabilities.live_sources && <div className="live-source-mini"><span className="eyebrow">Government connectors</span><strong>{liveSources.filter((source) => source.status === 'ready').length} live · {liveSources.length} registered</strong><small>Public sources refresh read-only; consent and approval-gated services wait for official credentials.</small><details><summary>View catalog</summary><div className="connector-mini-list">{liveSources.map((source) => <div key={source.endpoint_id}><span>{source.priority}</span><strong>{source.title}</strong><small>{source.status.replaceAll('_', ' ')}</small></div>)}</div></details></div>}</div>
       </aside>
       <section className="chat-panel">
         <button type="button" className="sidebar-toggle-panel" aria-controls="conversation-list" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? 'Show older conversations' : 'Hide older conversations'} title={sidebarCollapsed ? 'Show older conversations' : 'Hide older conversations'} onClick={toggleSidebar}><span className="sidebar-toggle-icon" aria-hidden="true" /><span className="sidebar-toggle-label">{sidebarCollapsed ? 'Show chats' : 'Hide chats'}</span></button>
         <div className="mobile-thread-tools"><label className="sr-only" htmlFor="mobile-thread-select">Conversation</label><select id="mobile-thread-select" value={detail?.thread.id ?? ''} onChange={(event) => { if (event.target.value) void openThread(event.target.value) }}><option value="">Conversations</option>{threads.map((thread) => <option key={thread.id} value={thread.id}>{thread.title}</option>)}</select><button className="new-thread" aria-label="New conversation" disabled={creatingThread} onClick={() => void newThread()}>+</button></div>
-        {loading ? <div className="chat-empty"><div className="loading-mark small" aria-hidden="true"><span /><span /><span /></div><p>Opening your conversation…</p></div> : detail ? <ChatThread capabilities={capabilities} ownerInitials={initials(ownerName)} detail={detail} ticketId={ticket?.ticket.civitas_ticket_id ?? detail.thread.ticket_id} prefill={prefill} onPrefillConsumed={() => setPrefill('')} onDetail={setDetail} onThreadsChanged={onThreadsChanged} onTicketAction={handleAgentAction} onOpenTicket={openTicket} onNewThread={() => void newThread()} /> : <ChatEmpty onStarter={chooseStarter} />}
+        {loading ? <div className="chat-empty"><div className="loading-mark small" aria-hidden="true"><span /><span /><span /></div><p>Opening your conversation…</p></div> : detail ? <ChatThread capabilities={capabilities} ownerInitials={initials(ownerName)} detail={detail} ticketId={ticket?.ticket.civitas_ticket_id ?? detail.thread.ticket_id} prefill={prefill} onPrefillConsumed={() => setPrefill('')} onDetail={setDetail} onThreadsChanged={onThreadsChanged} onTicketAction={handleAgentAction} onNewThread={() => void newThread()} /> : <ChatEmpty onStarter={chooseStarter} />}
       </section>
       {capabilities.tickets && (ticket || ticketAction) && <TicketDrawer ownerId={ownerId} action={ticketAction} ticket={ticket} threadId={detail?.thread.id ?? null} onClose={() => { setTicket(null); setTicketAction(null) }} onTicket={setTicket} onThreadsChanged={onThreadsChanged} />}
     </div>
@@ -1077,7 +1179,7 @@ function hasProviderFailure(detail: AgentThreadDetail): boolean {
   return Boolean(latestAssistant?.parts.some((part) => part.type === 'status' && part.data?.status === 'provider_error'))
 }
 
-function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, onPrefillConsumed, onDetail, onThreadsChanged, onTicketAction, onOpenTicket, onNewThread }: { capabilities: AppConfig['capabilities']; ownerInitials: string; detail: AgentThreadDetail; ticketId: string | null; prefill: string; onPrefillConsumed: () => void; onDetail: (detail: AgentThreadDetail) => void; onThreadsChanged: () => Promise<AgentThread[]>; onTicketAction: (action: Record<string, unknown>) => void; onOpenTicket: (ticketId: string) => void; onNewThread: () => void }) {
+function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, onPrefillConsumed, onDetail, onThreadsChanged, onTicketAction, onNewThread }: { capabilities: AppConfig['capabilities']; ownerInitials: string; detail: AgentThreadDetail; ticketId: string | null; prefill: string; onPrefillConsumed: () => void; onDetail: (detail: AgentThreadDetail) => void; onThreadsChanged: () => Promise<AgentThread[]>; onTicketAction: (action: Record<string, unknown>) => void; onNewThread: () => void }) {
   const [message, setMessage] = useState(prefill)
   const [attachments, setAttachments] = useState<StagedAttachment[]>([])
   const [savedAttachments, setSavedAttachments] = useState<Attachment[]>([])
@@ -1195,6 +1297,9 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
     const uploadedThisAttempt: Attachment[] = []
     const stagedAttachments = [...attachments]
     setPendingUserMessage({ content: submittedContent, attachments: stagedAttachments, createdAt: new Date().toISOString() })
+    setMessage('')
+    try { window.localStorage.removeItem(draftKey) } catch { /* ignore */ }
+    setDraftRestored(false)
     let requestStarted = false
     let turnCompleted = false
     try {
@@ -1264,12 +1369,10 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
       onDetail(next)
       setPendingUserMessage(null)
       if (hasProviderFailure(next)) {
-        throw new Error('The configured providers did not complete this turn. Your request is still in the composer; retry when a provider is reachable.')
+        throw new Error('The configured providers did not complete this turn. Retry when a provider is reachable.')
       }
-      setMessage('')
       clientMessageIdRef.current = null
       submittedContentRef.current = null
-      try { window.localStorage.removeItem(draftKey) } catch { /* ignore */ }
       setAttachments([])
       void clearAttachmentDrafts(detail.thread.id).catch(() => undefined)
       setUploadedAttachments({})
@@ -1294,8 +1397,8 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
       }
       setLastFailedPrompt(submittedContent)
       setTurnState(stopped ? 'stopped' : 'failed')
-      setPhase(stopped ? 'Response stopped · your draft is preserved' : 'Turn failed · retry when ready')
-      setError(stopped ? 'Response stopped. Your draft is still here; edit it or retry this turn.' : nextError instanceof Error ? nextError.message : 'Could not send the message')
+      setPhase(stopped ? 'Response stopped · edit or retry' : 'Turn failed · retry when ready')
+      setError(stopped ? 'Response stopped. You can edit or retry this turn.' : nextError instanceof Error ? nextError.message : 'Could not send the message')
     } finally {
       requestRef.current = null
       setIsSending(false)
