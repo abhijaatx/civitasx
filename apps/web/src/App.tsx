@@ -1,4 +1,6 @@
 import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   addFeedComment,
   ApiError,
@@ -868,6 +870,7 @@ function AgentView({ capabilities, ownerId, ownerName, threads, activeThreadId, 
   const [threadQuery, setThreadQuery] = useState('')
   const [agentError, setAgentError] = useState<string | null>(null)
   const [creatingThread, setCreatingThread] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const pendingPromptRef = useRef<string | null>(null)
   const openThread = useCallback(async (threadId: string) => {
     setLoading(true)
@@ -945,10 +948,11 @@ function AgentView({ capabilities, ownerId, ownerName, threads, activeThreadId, 
   }, [initialPrompt, onInitialPromptConsumed])
   const [threadSort, setThreadSort] = useState<'recent' | 'title'>('recent')
   const visibleThreads = [...threads].filter((thread) => thread.title.toLowerCase().includes(threadQuery.toLowerCase())).sort((left, right) => threadSort === 'title' ? left.title.localeCompare(right.title) : right.updated_at.localeCompare(left.updated_at))
+  const toggleSidebar = () => setSidebarCollapsed((current) => !current)
   return (
-    <div className="agent-view">
+    <div className={`agent-view ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       {agentError && <div className="agent-error" role="alert">{agentError}<button onClick={() => setAgentError(null)}>Dismiss</button></div>}
-      <aside className="thread-sidebar">
+      <aside id="conversation-list" className="thread-sidebar">
         <div className="thread-sidebar-top"><div><p className="eyebrow">Private workspace</p><h1>Agent</h1></div><button className="new-thread" aria-label="New conversation" disabled={creatingThread} onClick={() => void newThread()}>+</button></div>
         <button className="button button-lime button-full thread-new-button" disabled={creatingThread} onClick={() => void newThread()}>New conversation <span aria-hidden="true">↗</span></button>
         <div className="thread-filters"><label className="sr-only" htmlFor="thread-search">Search conversations</label><input id="thread-search" className="thread-search" value={threadQuery} onChange={(event) => setThreadQuery(event.target.value)} placeholder="Search conversations" /><label className="sr-only" htmlFor="thread-sort">Sort conversations</label><select id="thread-sort" value={threadSort} onChange={(event) => setThreadSort(event.target.value as 'recent' | 'title')}><option value="recent">Recent</option><option value="title">A–Z</option></select></div>
@@ -956,6 +960,7 @@ function AgentView({ capabilities, ownerId, ownerName, threads, activeThreadId, 
         <div className="thread-sidebar-note"><span className="dot dot-lime" /> Local evidence workspace.{capabilities.live_sources && <div className="live-source-mini"><span className="eyebrow">Government connectors</span><strong>{liveSources.filter((source) => source.status === 'ready').length} live · {liveSources.length} registered</strong><small>Public sources refresh read-only; consent and approval-gated services wait for official credentials.</small><details><summary>View catalog</summary><div className="connector-mini-list">{liveSources.map((source) => <div key={source.endpoint_id}><span>{source.priority}</span><strong>{source.title}</strong><small>{source.status.replaceAll('_', ' ')}</small></div>)}</div></details></div>}</div>
       </aside>
       <section className="chat-panel">
+        <button type="button" className="sidebar-toggle-panel" aria-controls="conversation-list" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? 'Show older conversations' : 'Hide older conversations'} title={sidebarCollapsed ? 'Show older conversations' : 'Hide older conversations'} onClick={toggleSidebar}><span className="sidebar-toggle-icon" aria-hidden="true" /><span className="sidebar-toggle-label">{sidebarCollapsed ? 'Show chats' : 'Hide chats'}</span></button>
         <div className="mobile-thread-tools"><label className="sr-only" htmlFor="mobile-thread-select">Conversation</label><select id="mobile-thread-select" value={detail?.thread.id ?? ''} onChange={(event) => { if (event.target.value) void openThread(event.target.value) }}><option value="">Conversations</option>{threads.map((thread) => <option key={thread.id} value={thread.id}>{thread.title}</option>)}</select><button className="new-thread" aria-label="New conversation" disabled={creatingThread} onClick={() => void newThread()}>+</button></div>
         {loading ? <div className="chat-empty"><div className="loading-mark small" aria-hidden="true"><span /><span /><span /></div><p>Opening your conversation…</p></div> : detail ? <ChatThread capabilities={capabilities} ownerInitials={initials(ownerName)} detail={detail} ticketId={ticket?.ticket.civitas_ticket_id ?? detail.thread.ticket_id} prefill={prefill} onPrefillConsumed={() => setPrefill('')} onDetail={setDetail} onThreadsChanged={onThreadsChanged} onTicketAction={handleAgentAction} onOpenTicket={openTicket} onNewThread={() => void newThread()} /> : <ChatEmpty onStarter={chooseStarter} />}
       </section>
@@ -1080,7 +1085,6 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<string | null>(null)
   const [liveTurn, setLiveTurn] = useState<LiveTurnItem[]>([])
-  const [streamingText, setStreamingText] = useState('')
   const [turnState, setTurnState] = useState<TurnState>('idle')
   const [lastFailedPrompt, setLastFailedPrompt] = useState<string | null>(null)
   const [draftRestored, setDraftRestored] = useState(false)
@@ -1133,7 +1137,6 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
     setError(null)
     setPhase(null)
     setLiveTurn([])
-    setStreamingText('')
     setTurnState('idle')
     setLastFailedPrompt(null)
   }, [detail.thread.id])
@@ -1147,7 +1150,7 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
   }
   useEffect(() => {
     queueScrollToLatest()
-  }, [detail.messages.length, liveTurn.length, phase, streamingText, turnState])
+  }, [detail.messages.length, liveTurn.length, phase, turnState])
   useEffect(() => {
     const composer = composerRef.current
     if (!composer || typeof ResizeObserver === 'undefined') return
@@ -1193,7 +1196,6 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
     try {
       updateLiveStatus('Preparing your local evidence…')
       setLiveTurn([{ id: 'turn-status', kind: 'status', label: 'Preparing your local evidence…', state: 'active' }])
-      setStreamingText('')
       const uploadResults = await Promise.all(stagedAttachments.map(async (staged) => {
         const existing = staged.uploadedId ? uploadedAttachments[staged.uploadedId] : undefined
         if (existing) return { staged, attachment: existing }
@@ -1252,9 +1254,6 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
               return current.map((item) => item.id === toolId ? { ...item, state } : item)
             })
           }
-          if (event.event === 'message' && typeof event.data.delta === 'string') {
-            setStreamingText((current) => current + String(event.data.delta))
-          }
         },
         clientMessageId,
       )
@@ -1272,7 +1271,6 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
       stagedAttachments.forEach((item) => { if (item.previewUrl) URL.revokeObjectURL(item.previewUrl) })
       setDraftRestored(false)
       setTurnState('idle')
-      setStreamingText('')
       setLiveTurn([])
       setLastFailedPrompt(null)
       turnCompleted = true
@@ -1354,7 +1352,7 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
       <div ref={messageListRef} className="message-list" onScroll={handleMessageScroll}>
         {detail.messages.length === 0 && <div className="assistant-message welcome"><span className="message-avatar">CX</span><div><strong>I’m ready when you are.</strong><p>Research a record, explain an official document, or prepare a complaint. You approve anything public or external.</p><div className="welcome-hints"><button onClick={() => setMessage('/research safer walking routes near my locality')}>Research a record</button><button onClick={() => setMessage('/complaint broken streetlight near Indiranagar')}>Prepare a complaint</button></div></div></div>}
         {detail.messages.map((item, index) => <MessageBubble key={item.id} message={item} userInitials={ownerInitials} ticketId={linkedTicketId} retryContent={item.role === 'assistant' ? detail.messages[index - 1]?.content : undefined} onReuse={setMessage} onTicketAction={onTicketAction} />)}
-        {turnState !== 'idle' && <HermesLiveTurn state={turnState} phase={phase} items={liveTurn} text={streamingText} onRetry={lastFailedPrompt ? retryLastTurn : undefined} />}
+        {turnState !== 'idle' && <HermesLiveTurn state={turnState} phase={phase} items={liveTurn} onRetry={lastFailedPrompt ? retryLastTurn : undefined} />}
       </div>
       <div ref={composerRef} className="chat-composer-wrap">
         <div className="composer-privacy"><span className="dot dot-lime" /> Private thread · nothing is submitted or posted without your approval {phase && <strong className="agent-phase">{phase}</strong>}</div>
@@ -1374,19 +1372,26 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
   )
 }
 
-function HermesLiveTurn({ state, phase, items, text, onRetry }: { state: Exclude<TurnState, 'idle'>; phase: string | null; items: LiveTurnItem[]; text: string; onRetry?: () => void }) {
+function HermesLiveTurn({ state, phase, items, onRetry }: { state: Exclude<TurnState, 'idle'>; phase: string | null; items: LiveTurnItem[]; onRetry?: () => void }) {
   const activeTool = items.some((item) => item.kind === 'tool' && item.state === 'active')
-  const stateLabel = state === 'running' ? activeTool ? 'running a civic tool' : text ? 'streaming now' : 'thinking…' : state === 'stopped' ? 'stopped by you' : 'needs a retry'
-  const headingLabel = state === 'running' ? activeTool ? 'tool activity' : text ? 'live output' : 'thinking' : stateLabel
-  return <div className={`assistant-message hermes-live-turn ${state}`} role="status" aria-live="polite"><span className="message-avatar">CX</span><div className="hermes-live-card"><div className="hermes-live-heading"><span className="eyebrow">Hermes turn · {headingLabel}</span><span className="hermes-live-state"><span className={`dot ${state === 'running' ? 'dot-lime' : ''}`} />{stateLabel}</span></div><p className={`hermes-live-phase ${state === 'running' && !text ? 'thinking' : ''}`}>{state === 'running' && !text && <span className="thinking-bars" aria-hidden="true"><span /><span /><span /></span>}{phase ?? 'Starting the local agent…'}</p>{items.length > 0 && <div className="hermes-live-events">{items.map((item) => <div className={`hermes-live-event ${item.kind} ${item.state}`} key={item.id}><span className="hermes-live-glyph" aria-hidden="true">{item.kind === 'tool' ? '↳' : item.kind === 'plan' ? '→' : '•'}</span><code>{item.kind === 'tool' ? formatLiveToolName(item.label) : item.label}</code><span>{item.state === 'active' ? 'working' : item.state === 'pending' ? 'queued' : item.state === 'completed' ? 'done' : 'error'}</span></div>)}</div>}{text && <div className="hermes-live-output"><span className="eyebrow">Live output</span><p>{text}{state === 'running' && <span className="stream-cursor" aria-hidden="true">▌</span>}</p></div>}{onRetry && <button type="button" className="message-reuse assistant-reuse" onClick={onRetry}>Retry this turn</button>}</div></div>
+  const stateLabel = state === 'running' ? 'Thinking' : state === 'stopped' ? 'Response stopped' : 'Turn failed'
+  if (state === 'running') return <div className="agent-thinking" role="status" aria-live="polite"><span className="message-avatar">CX</span><div className="agent-thinking-copy"><strong>{stateLabel}<span className="thinking-dots" aria-hidden="true">...</span></strong><span>{activeTool ? `Using ${formatLiveToolName(items.find((item) => item.kind === 'tool' && item.state === 'active')?.label ?? 'a civic tool')}` : phase ?? 'Working through the request'}</span></div></div>
+  return <div className={`agent-turn-state ${state}`} role="status" aria-live="polite"><strong>{stateLabel}</strong><span>{phase ?? (state === 'stopped' ? 'Your draft is preserved.' : 'You can retry this turn.')}</span>{onRetry && <button type="button" className="message-reuse assistant-reuse" onClick={onRetry}>Retry this turn</button>}</div>
+}
+
+function AssistantMarkdown({ content }: { content: string }) {
+  return <div className="assistant-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ table: ({ children }) => <div className="markdown-table-wrap"><table>{children}</table></div> }}>{content}</ReactMarkdown></div>
 }
 
 function MessageBubble({ message, userInitials, ticketId, retryContent, onReuse, onTicketAction }: { message: AgentMessage; userInitials: string; ticketId: string | null; retryContent?: string; onReuse: (content: string) => void; onTicketAction: (action: Record<string, unknown>) => void }) {
-  if (message.role === 'user') return <div className="user-message"><div className="message-content"><p>{message.content}</p><div className="message-meta">{formatTime(message.created_at)}</div>{message.parts.filter((part) => part.type === 'attachment').map((part) => <span className="message-attachment" key={part.attachment_id}>{part.text ?? 'Attached evidence'}</span>)}<button className="message-reuse" onClick={() => onReuse(message.content)}>Edit / use again</button></div><span className="message-avatar message-avatar-user" aria-hidden="true">{userInitials}</span></div>
+  if (message.role === 'user') {
+    const attachments = message.parts.filter((part) => part.type === 'attachment')
+    return <div className="user-message"><div className="message-content"><p>{message.content}</p></div><span className="message-avatar message-avatar-user" aria-hidden="true">{userInitials}</span>{attachments.length > 0 && <div className="message-supporting user-message-attachments">{attachments.map((part) => <span className="message-attachment" key={part.attachment_id}>{part.text ?? 'Attached evidence'}</span>)}<button className="message-reuse" onClick={() => onReuse(message.content)}>Edit / use again</button></div>}</div>
+  }
   const citations = message.parts.filter((part) => part.type === 'citation')
   const actions = message.parts.filter((part) => part.type === 'action')
   const toolParts = message.parts.filter((part) => part.type === 'tool' || part.type === 'status' || part.type === 'command')
-  return <div className="assistant-message"><span className="message-avatar">CX</span><div className="message-content"><p>{message.content}</p><div className="message-meta">{formatTime(message.created_at)}</div>{toolParts.length > 0 && <details className="hermes-trace" open={false}><summary><span className="eyebrow">Hermes turn trace</span><span>{toolParts.length} events</span></summary><div>{toolParts.map((part, index) => { const toolName = typeof part.data?.tool_name === 'string' ? part.data.tool_name : part.type; return <div className="hermes-trace-row" key={`${part.type}-${index}`}><span className="dot dot-lime" /><code>{part.text ?? toolName}</code><span>{part.type === 'command' ? 'command' : part.data?.status === 'planned' ? 'planned' : 'completed'}</span></div> })}</div></details>}{citations.length > 0 && <div className="message-citations"><p className="eyebrow">Source passages · verified record</p>{citations.map((part, index) => { const passage = typeof part.data?.passage === 'string' ? part.data.passage : ''; const original = typeof part.data?.original_passage === 'string' ? part.data.original_passage : ''; const title = typeof part.data?.title === 'string' ? part.data.title : part.text ?? 'Source passage'; const authority = typeof part.data?.authority === 'string' ? part.data.authority : 'Official authority'; const url = typeof part.data?.url === 'string' ? part.data.url : ''; return <details key={`${part.attachment_id}-${index}`}><summary>{title}</summary><div className="citation-meta"><span>{authority}</span><span>Page {typeof part.data?.page === 'number' ? part.data.page : '—'}</span><span>Retrieved {typeof part.data?.retrieved_at === 'string' ? formatDate(part.data.retrieved_at) : 'unknown'}</span>{url && <a href={url} target="_blank" rel="noreferrer">Official page ↗</a>}</div><p>{passage || 'No extractable passage was available for this source.'}</p>{original && <small>Original text: {original}</small>}</details> })}</div>}{actions.map((part, index) => <AgentAction key={`${part.type}-${index}`} part={part} ticketId={ticketId} onTicketAction={onTicketAction} />)}{retryContent && <button className="message-reuse assistant-reuse" onClick={() => onReuse(retryContent)}>Edit and send again</button>}</div></div>
+  return <div className="assistant-message"><span className="message-avatar">CX</span><div className="assistant-message-stack"><div className="message-content"><AssistantMarkdown content={message.content} /></div>{toolParts.length > 0 && <details className="hermes-trace" open={false}><summary><span className="eyebrow">Hermes turn trace</span><span>{toolParts.length} events</span></summary><div>{toolParts.map((part, index) => { const toolName = typeof part.data?.tool_name === 'string' ? part.data.tool_name : part.type; return <div className="hermes-trace-row" key={`${part.type}-${index}`}><span className="dot dot-lime" /><code>{part.text ?? toolName}</code><span>{part.type === 'command' ? 'command' : part.data?.status === 'planned' ? 'planned' : 'completed'}</span></div> })}</div></details>}{citations.length > 0 && <div className="message-supporting message-citations"><p className="eyebrow">Source passages · verified record</p>{citations.map((part, index) => { const passage = typeof part.data?.passage === 'string' ? part.data.passage : ''; const original = typeof part.data?.original_passage === 'string' ? part.data.original_passage : ''; const title = typeof part.data?.title === 'string' ? part.data.title : part.text ?? 'Source passage'; const authority = typeof part.data?.authority === 'string' ? part.data.authority : 'Official authority'; const url = typeof part.data?.url === 'string' ? part.data.url : ''; return <details key={`${part.attachment_id}-${index}`}><summary>{title}</summary><div className="citation-meta"><span>{authority}</span><span>Page {typeof part.data?.page === 'number' ? part.data.page : '—'}</span><span>Retrieved {typeof part.data?.retrieved_at === 'string' ? formatDate(part.data.retrieved_at) : 'unknown'}</span>{url && <a href={url} target="_blank" rel="noreferrer">Official page ↗</a>}</div><p>{passage || 'No extractable passage was available for this source.'}</p>{original && <small>Original text: {original}</small>}</details> })}</div>}{actions.map((part, index) => <AgentAction key={`${part.type}-${index}`} part={part} ticketId={ticketId} onTicketAction={onTicketAction} />)}{retryContent && <button className="message-reuse assistant-reuse" onClick={() => onReuse(retryContent)}>Edit and send again</button>}</div></div>
 }
 
 function AgentAction({ part, ticketId, onTicketAction }: { part: MessagePart; ticketId: string | null; onTicketAction: (action: Record<string, unknown>) => void }) {
