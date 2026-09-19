@@ -998,6 +998,7 @@ function ChatEmpty({ onStarter }: { onStarter: (prompt: string) => void }) {
 }
 
 type StagedAttachment = { id: string; file: File; previewUrl: string | null; uploadedId?: string }
+type PendingUserMessage = { content: string; attachments: StagedAttachment[]; createdAt: string }
 type StoredAttachment = { key: string; threadId: string; id: string; filename: string; contentType: string; lastModified: number; file: Blob }
 const ATTACHMENT_DB_NAME = 'civitasx-attachment-drafts'
 
@@ -1086,6 +1087,7 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
   const [phase, setPhase] = useState<string | null>(null)
   const [liveTurn, setLiveTurn] = useState<LiveTurnItem[]>([])
   const [turnState, setTurnState] = useState<TurnState>('idle')
+  const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null)
   const [lastFailedPrompt, setLastFailedPrompt] = useState<string | null>(null)
   const [draftRestored, setDraftRestored] = useState(false)
   const [attachmentsRestored, setAttachmentsRestored] = useState(false)
@@ -1138,6 +1140,7 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
     setPhase(null)
     setLiveTurn([])
     setTurnState('idle')
+    setPendingUserMessage(null)
     setLastFailedPrompt(null)
   }, [detail.thread.id])
   const queueScrollToLatest = () => {
@@ -1150,7 +1153,7 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
   }
   useEffect(() => {
     queueScrollToLatest()
-  }, [detail.messages.length, liveTurn.length, phase, turnState])
+  }, [detail.messages.length, liveTurn.length, pendingUserMessage?.createdAt, phase, turnState])
   useEffect(() => {
     const composer = composerRef.current
     if (!composer || typeof ResizeObserver === 'undefined') return
@@ -1191,6 +1194,7 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
     requestRef.current = controller
     const uploadedThisAttempt: Attachment[] = []
     const stagedAttachments = [...attachments]
+    setPendingUserMessage({ content: submittedContent, attachments: stagedAttachments, createdAt: new Date().toISOString() })
     let requestStarted = false
     let turnCompleted = false
     try {
@@ -1258,6 +1262,7 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
         clientMessageId,
       )
       onDetail(next)
+      setPendingUserMessage(null)
       if (hasProviderFailure(next)) {
         throw new Error('The configured providers did not complete this turn. Your request is still in the composer; retry when a provider is reachable.')
       }
@@ -1343,15 +1348,20 @@ function ChatThread({ capabilities, ownerInitials, detail, ticketId, prefill, on
     ['/help', 'Show all commands'],
   ] as const
   const commandPaletteOpen = message.startsWith('/') && !message.includes(' ') && !isSending
+  const pendingMessage: AgentMessage | null = pendingUserMessage ? {
+    id: `pending-${pendingUserMessage.createdAt}`,
+    thread_id: detail.thread.id,
+    role: 'user',
+    content: pendingUserMessage.content,
+    parts: pendingUserMessage.attachments.map((attachment) => ({ type: 'attachment', attachment_id: attachment.id, text: attachment.file.name })),
+    created_at: pendingUserMessage.createdAt,
+  } : null
   return (
     <div className="chat-thread">
-      <header className="chat-header">
-      <div className="chat-header-copy"><p className="eyebrow">Private conversation</p><h1>{detail.thread.title}</h1><p className="chat-subtitle">{detail.messages.length} messages · Private conversation</p></div>
-        <span className="chat-state"><span className="dot dot-lime" /> {linkedTicketId ? <button className="chat-ticket-link" onClick={() => onOpenTicket(linkedTicketId)}>Civitas case {linkedTicketId}</button> : 'Hermes-style local agent'}</span>
-      </header>
       <div ref={messageListRef} className="message-list" onScroll={handleMessageScroll}>
         {detail.messages.length === 0 && <div className="assistant-message welcome"><span className="message-avatar">CX</span><div><strong>I’m ready when you are.</strong><p>Research a record, explain an official document, or prepare a complaint. You approve anything public or external.</p><div className="welcome-hints"><button onClick={() => setMessage('/research safer walking routes near my locality')}>Research a record</button><button onClick={() => setMessage('/complaint broken streetlight near Indiranagar')}>Prepare a complaint</button></div></div></div>}
         {detail.messages.map((item) => <MessageBubble key={item.id} message={item} userInitials={ownerInitials} ticketId={linkedTicketId} onReuse={setMessage} onTicketAction={onTicketAction} />)}
+        {pendingMessage && <MessageBubble key={pendingMessage.id} message={pendingMessage} userInitials={ownerInitials} ticketId={linkedTicketId} onReuse={setMessage} onTicketAction={onTicketAction} />}
         {turnState !== 'idle' && <HermesLiveTurn state={turnState} phase={phase} items={liveTurn} onRetry={lastFailedPrompt ? retryLastTurn : undefined} />}
       </div>
       <div ref={composerRef} className="chat-composer-wrap">
