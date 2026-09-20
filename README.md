@@ -8,58 +8,7 @@ CivitasX is a local-first civic network for Bengaluru residents. It combines a p
 
 The Phase 2 AWS boundary is defined in [`infra/template.yaml`](infra/template.yaml):
 
-```mermaid
-flowchart TB
-    Resident[Resident browser]
-
-    subgraph Edge[Public edge]
-        CloudFront[Amazon CloudFront\nHTTPS SPA delivery]
-        WebBucket[(Private S3\nfrontend bucket)]
-    end
-
-    subgraph Identity[Identity]
-        Cognito[Amazon Cognito\nUser Pool + OAuth client]
-    end
-
-    subgraph Runtime[Application runtime]
-        Api[Lambda Web Adapter\nFastAPI Function URL]
-        Logs[CloudWatch Logs]
-        Role[IAM runtime role]
-    end
-
-    subgraph Data[Private application data]
-        Table[(DynamoDB\nowner-scoped table)]
-        Artifacts[(S3\nencrypted artifacts)]
-        Corpus[(S3\nversioned source corpus)]
-    end
-
-    Bedrock[Amazon Bedrock\nNova + Titan embeddings]
-
-    subgraph Guardrails[Operational guardrails]
-        Budget[AWS Budgets]
-        SNS[Amazon SNS\noptional email alert]
-    end
-
-    Resident -->|HTTPS| CloudFront
-    Resident -->|Sign in / tokens| Cognito
-    Resident -->|API requests| Api
-    CloudFront -->|Origin Access Control| WebBucket
-    Cognito -->|Bearer tokens| Api
-    Api --> Role
-    Role --> Table
-    Role --> Artifacts
-    Role --> Corpus
-    Role --> Bedrock
-    Api --> Logs
-    Budget --> SNS
-
-    classDef aws fill:#fff3e0,stroke:#d97706,color:#111827
-    classDef data fill:#e0f2fe,stroke:#0284c7,color:#111827
-    classDef edge fill:#ede9fe,stroke:#7c3aed,color:#111827
-    class CloudFront,Cognito,Api,Logs,Role,Bedrock,Budget,SNS aws
-    class Table,Artifacts,Corpus,WebBucket data
-    class Resident edge
-```
+![CivitasX AWS Architecture — Phase 2](docs/aws-architecture-phase2.png)
 
 The frontend bucket, artifacts bucket, and source-corpus bucket remain private. The application uses Cognito for production identity, DynamoDB for owner-scoped state, S3 for artifacts and versioned source documents, and Bedrock only when the configured cloud provider is enabled.
 
