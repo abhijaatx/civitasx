@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="176" height="132" viewBox="0 0 176 132" role="img" aria-labelledby="title desc">
+  <title id="title">Analytics navigation button</title>
+  <desc id="desc">Analytics navigation button with a muted rounded-square icon and label.</desc>
+  <path d="M67 57V35M78 57V28M89 57V42M100 57V23" stroke="#f3f0e8" stroke-opacity=".78" stroke-width="6" stroke-linecap="round"/>
+  <path d="M63 60h42" stroke="#f3f0e8" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/>
+  <text x="88" y="94" text-anchor="middle" fill="#f3f0e8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14.5" font-weight="600" letter-spacing="2.35">ANALYTICS</text>
+</svg>

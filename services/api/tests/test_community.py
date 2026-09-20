@@ -170,7 +170,7 @@ def test_feed_is_seeded_and_votes_comments_are_reversible(community_client: Test
     response = community_client.get("/api/feed", headers=auth)
     assert response.status_code == 200, response.text
     posts = response.json()["items"]
-    assert len(posts) == 3
+    assert len(posts) == 4
     assert posts[0]["civitas_ticket_id"].startswith("CX-BLR-DEMO-")
     assert posts[0]["vote_score"] > 0
     assert posts[0]["status"] in {"in_progress", "acknowledged", "not_solved"}
@@ -182,6 +182,17 @@ def test_feed_is_seeded_and_votes_comments_are_reversible(community_client: Test
         )
         assert evidence.status_code == 200
         assert seeded_post["evidence_count"] == len(evidence.json()["items"])
+
+    streetlight = next(
+        post for post in posts if post["id"] == "demo-post-4"
+    )
+    attachments = community_client.get(
+        f"/api/feed/{streetlight['id']}/attachments", headers=auth
+    )
+    assert attachments.status_code == 200
+    assert [item["filename"] for item in attachments.json()["items"]] == [
+        "broken-streetlight-sample.png"
+    ]
 
     post_id = posts[0]["id"]
     upvote = community_client.post(

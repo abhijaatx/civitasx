@@ -1,3 +1,10 @@
+import {
+  AuthenticationDetails,
+  CognitoUser,
+  CognitoUserAttribute,
+  CognitoUserPool,
+  CognitoUserSession,
+} from 'amazon-cognito-identity-js'
 import type {
   AppConfig,
   AgentThread,
@@ -16,6 +23,9 @@ import type {
   PreparationApproval,
   ShareSnapshot,
   TicketPreparation,
+  AgentRun,
+  AgentLocation,
+  AgentLanguage,
   LiveEndpointProfile,
   ResearchAnswer,
   ResearchHistory,
@@ -47,6 +57,11 @@ function resolveApiUrl(value: string | undefined): string {
 // can route /api without exposing a user's browser to a machine-local URL.
 const API_URL = resolveApiUrl(import.meta.env.VITE_API_URL as string | undefined)
 const TOKEN_KEY = 'civitas.access_token'
+
+export type CognitoClientConfig = {
+  userPoolId: string | null
+  clientId: string | null
+}
 
 export class ApiError extends Error {
   readonly status: number
@@ -172,6 +187,129 @@ export async function exchangeCognitoCode(code: string, redirectUri: string): Pr
   })
   setToken(result.access_token)
   return getMe()
+}
+
+function createCognitoUserPool(config: CognitoClientConfig): CognitoUserPool {
+  if (!config.userPoolId || !config.clientId) {
+    throw new ApiError(0, 'Cognito is selected, but the account service is not configured yet.')
+  }
+  return new CognitoUserPool({ UserPoolId: config.userPoolId, ClientId: config.clientId })
+}
+
+function cognitoError(error: unknown, fallback: string): ApiError {
+  const nextError = error as { code?: string; message?: string } | null
+  const messages: Record<string, string> = {
+    NotAuthorizedException: 'Invalid email or password.',
+    UserNotFoundException: 'Invalid email or password.',
+    UsernameExistsException: 'An account already exists for this email. Sign in instead.',
+    InvalidPasswordException: 'Choose a stronger password that meets the account requirements.',
+    CodeMismatchException: 'That verification code is not valid. Check it and try again.',
+    ExpiredCodeException: 'That verification code has expired. Request a new one.',
+    UserNotConfirmedException: 'Verify your email before signing in.',
+    TooManyRequestsException: 'Too many attempts. Please wait a moment and try again.',
+    LimitExceededException: 'Too many attempts. Please wait a moment and try again.',
+  }
+  return new ApiError(0, (nextError?.code && messages[nextError.code]) || nextError?.message || fallback)
+}
+
+async function finishCognitoSession(session: CognitoUserSession): Promise<User> {
+  if (!session.isValid()) throw new ApiError(0, 'Your identity session is no longer valid. Please try again.')
+  // The ID token contains the verified email/name claims used to create the API user.
+  setToken(session.getIdToken().getJwtToken())
+  return getMe()
+}
+
+export async function loginWithCognito(
+  email: string,
+  password: string,
+  config: CognitoClientConfig,
+): Promise<User> {
+  const pool = createCognitoUserPool(config)
+  const user = new CognitoUser({ Username: email.trim(), Pool: pool })
+  const details = new AuthenticationDetails({ Username: email.trim(), Password: password })
+  user.setAuthenticationFlowType('USER_SRP_AUTH')
+  return new Promise((resolve, reject) => {
+    user.authenticateUser(details, {
+      onSuccess: (session) => { void finishCognitoSession(session).then(resolve, reject) },
+      onFailure: (error) => reject(cognitoError(error, 'Could not sign in.')),
+      newPasswordRequired: () => reject(new ApiError(0, 'This account needs a new password before it can be used.')),
+      mfaRequired: () => reject(new ApiError(0, 'Multi-factor sign-in is required for this account. Use the secure sign-in page to continue.')),
+      totpRequired: () => reject(new ApiError(0, 'Authenticator verification is required for this account. Use the secure sign-in page to continue.')),
+    })
+  })
+}
+
+export async function registerWithCognito(
+  name: string,
+  email: string,
+  password: string,
+  config: CognitoClientConfig,
+): Promise<{ userConfirmed: boolean; destination?: string }> {
+  const pool = createCognitoUserPool(config)
+  const attributes = name.trim()
+    ? [new CognitoUserAttribute({ Name: 'name', Value: name.trim() })]
+    : []
+  return new Promise((resolve, reject) => {
+    pool.signUp(email.trim(), password, attributes, [], (error, result) => {
+      if (error || !result) {
+        reject(cognitoError(error, 'Could not create this account.'))
+        return
+      }
+      resolve({
+        userConfirmed: result.userConfirmed,
+        destination: result.codeDeliveryDetails?.Destination,
+      })
+    })
+  })
+}
+
+export async function confirmCognitoRegistration(
+  email: string,
+  code: string,
+  config: CognitoClientConfig,
+): Promise<void> {
+  const pool = createCognitoUserPool(config)
+  const user = new CognitoUser({ Username: email.trim(), Pool: pool })
+  return new Promise((resolve, reject) => {
+    user.confirmRegistration(code.trim(), true, (error) => {
+      if (error) {
+        reject(cognitoError(error, 'Could not verify this account.'))
+        return
+      }
+      resolve()
+    })
+  })
+}
+
+export async function startCognitoPasswordReset(
+  email: string,
+  config: CognitoClientConfig,
+): Promise<{ destination?: string }> {
+  const pool = createCognitoUserPool(config)
+  const user = new CognitoUser({ Username: email.trim(), Pool: pool })
+  return new Promise((resolve, reject) => {
+    user.forgotPassword({
+      onSuccess: (data) => resolve({ destination: data?.CodeDeliveryDetails?.Destination }),
+      onFailure: (error) => reject(cognitoError(error, 'Could not start password reset.')),
+      inputVerificationCode: (data) => resolve({ destination: data?.CodeDeliveryDetails?.Destination }),
+    })
+  })
+}
+
+export async function confirmCognitoPasswordReset(
+  email: string,
+  code: string,
+  password: string,
+  config: CognitoClientConfig,
+): Promise<void> {
+  const pool = createCognitoUserPool(config)
+  const user = new CognitoUser({ Username: email.trim(), Pool: pool })
+  return new Promise((resolve, reject) => {
+    user.confirmPassword(code.trim(), password, {
+      onSuccess: () => resolve(),
+      onFailure: (error) => reject(cognitoError(error, 'Could not reset this password.')),
+    })
+  })
 }
 
 export async function logout(): Promise<void> {
@@ -438,11 +576,11 @@ export async function updateThread(threadId: string, input: { title?: string; st
   })
 }
 
-export async function sendAgentMessage(threadId: string, content: string, attachmentIds: string[] = [], signal?: AbortSignal, clientMessageId?: string): Promise<AgentThreadDetail> {
+export async function sendAgentMessage(threadId: string, content: string, attachmentIds: string[] = [], signal?: AbortSignal, clientMessageId?: string, location?: AgentLocation | null, responseLanguage: AgentLanguage = 'auto'): Promise<AgentThreadDetail> {
   return request<AgentThreadDetail>(`/api/agent/threads/${encodeURIComponent(threadId)}/messages`, {
     method: 'POST',
     signal,
-    body: JSON.stringify({ content, attachment_ids: attachmentIds, client_message_id: clientMessageId }),
+    body: JSON.stringify({ content, attachment_ids: attachmentIds, client_message_id: clientMessageId, location, response_language: responseLanguage }),
   })
 }
 
@@ -454,6 +592,8 @@ export async function sendAgentMessageStream(
   signal?: AbortSignal,
   onEvent?: (event: AgentStreamEvent) => void,
   clientMessageId?: string,
+  location?: AgentLocation | null,
+  responseLanguage: AgentLanguage = 'auto',
 ): Promise<AgentThreadDetail> {
   const headers = new Headers({ 'Content-Type': 'application/json', Accept: 'text/event-stream' })
   const token = getToken()
@@ -462,7 +602,7 @@ export async function sendAgentMessageStream(
   try {
     response = await fetch(`${API_URL}/api/agent/threads/${encodeURIComponent(threadId)}/messages/stream`, {
       method: 'POST', headers, signal,
-      body: JSON.stringify({ content, attachment_ids: attachmentIds, client_message_id: clientMessageId }),
+      body: JSON.stringify({ content, attachment_ids: attachmentIds, client_message_id: clientMessageId, location, response_language: responseLanguage }),
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error
@@ -606,6 +746,21 @@ export async function approveTicketPreparation(ticketId: string, contentHash: st
     method: 'POST',
     body: JSON.stringify({ content_hash: contentHash }),
   })
+}
+
+export async function submitTicket(ticketId: string): Promise<AgentRun> {
+  return request<AgentRun>(`/api/tickets/${encodeURIComponent(ticketId)}/submit`, { method: 'POST' })
+}
+
+export async function resumeAgentRun(runId: string, input: { sendOtp?: boolean; submit?: boolean; residentAttestation?: boolean } = {}): Promise<AgentRun> {
+  return request<AgentRun>(`/api/runs/${encodeURIComponent(runId)}/resume`, {
+    method: 'POST',
+    body: JSON.stringify({ send_otp: input.sendOtp ?? false, submit: input.submit ?? false, resident_attestation: input.residentAttestation ?? false }),
+  })
+}
+
+export async function cancelAgentRun(runId: string): Promise<AgentRun> {
+  return request<AgentRun>(`/api/runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST' })
 }
 
 export async function getTicketCheckpoints(ticketId: string): Promise<Checkpoint[]> {

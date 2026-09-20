@@ -29,6 +29,19 @@ Parameters:
     Default: 2
     MinValue: 1
     MaxValue: 20
+  McpAllowedHosts:
+    Type: String
+    Default: 'localhost:*,127.0.0.1:*'
+    Description: Comma-separated Host values accepted by the MCP transport.
+  BedrockModel:
+    Type: String
+    Default: apac.amazon.nova-lite-v1:0
+    Description: Bedrock model or APAC inference profile enabled in this account.
+  AttachmentMaxBytes:
+    Type: Number
+    Default: 5242880
+    MinValue: 1024
+    Description: Maximum attachment request size for the Lambda Function URL.
 
 Conditions:
   HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
@@ -57,14 +70,19 @@ Globals:
         CIVITAS_LIVE_STATUS_PREFIX: runtime/live-status/
         CIVITAS_TRANSLATION_CACHE_PATH: /tmp/translation-cache.json
         CIVITAS_FRONTEND_ORIGIN: !Ref FrontendOrigin
+        CIVITAS_MCP_ALLOWED_HOSTS: !Ref McpAllowedHosts
+        CIVITAS_MCP_ALLOWED_ORIGINS: !Ref FrontendOrigin
         CIVITAS_GLOBAL_BUDGET_USD: !Ref MonthlyBudgetUsd
         CIVITAS_BROWSER_CONCURRENCY: !Ref BrowserConcurrency
+        CIVITAS_ATTACHMENT_MAX_BYTES: !Ref AttachmentMaxBytes
         CIVITAS_COGNITO_REGION: !Ref AWS::Region
         CIVITAS_COGNITO_USER_POOL_ID: !Ref CivitasUserPool
         CIVITAS_COGNITO_CLIENT_ID: !Ref CivitasUserPoolClient
-        CIVITAS_COGNITO_DOMAIN: !Sub '${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
+        CIVITAS_COGNITO_DOMAIN: !Sub 'https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com'
         CIVITAS_AGENT_PROVIDER: bedrock
-        CIVITAS_BEDROCK_MODEL: amazon.nova-lite-v1:0
+        CIVITAS_BEDROCK_MODEL: !Ref BedrockModel
+        PORT: '8000'
+        AWS_LWA_PORT: '8000'
         AWS_LAMBDA_EXEC_WRAPPER: /opt/bootstrap
         AWS_LWA_INVOKE_MODE: response_stream
 
@@ -73,6 +91,7 @@ Resources:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Sub civitasx-${StageName}
+      UserPoolTier: LITE
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
       Policies:
@@ -158,6 +177,14 @@ Resources:
             Status: Enabled
             Prefix: browser/
             ExpirationInDays: 30
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - !Ref FrontendOrigin
+            AllowedMethods: [GET, PUT, HEAD]
+            AllowedHeaders: ['*']
+            ExposedHeaders: [ETag]
+            MaxAge: 600
 
   CivitasCorpus:
     Type: AWS::S3::Bucket
@@ -180,6 +207,94 @@ Resources:
           Value: CivitasX
         - Key: Phase
           Value: '2'
+
+  CivitasWebBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Product
+          Value: CivitasX
+        - Key: Phase
+          Value: '2'
+
+  CivitasWebOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub civitasx-${StageName}-web-oac
+        Description: Private S3 origin access for the CivitasX SPA.
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CivitasWebDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub civitasx-${StageName}-web
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_200
+        DefaultRootObject: index.html
+        Origins:
+          - Id: CivitasWebOrigin
+            DomainName: !GetAtt CivitasWebBucket.RegionalDomainName
+            OriginAccessControlId: !Ref CivitasWebOriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: CivitasWebOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          MinTTL: 0
+          DefaultTTL: 86400
+          MaxTTL: 31536000
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+  CivitasWebBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CivitasWebBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${CivitasWebBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${CivitasWebDistribution}
 
   CivitasApiRole:
     Type: AWS::IAM::Role
@@ -256,12 +371,6 @@ Resources:
       FunctionUrlConfig:
         AuthType: NONE
         InvokeMode: RESPONSE_STREAM
-        Cors:
-          AllowOrigins:
-            - !Ref FrontendOrigin
-          AllowMethods: [GET, POST, PATCH, DELETE, OPTIONS]
-          AllowHeaders: [Authorization, Content-Type]
-          MaxAge: 600
       Tags:
         Product: CivitasX
         Phase: '2'
@@ -269,6 +378,7 @@ Resources:
   CivitasApiLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LogGroupName: !Sub /aws/lambda/civitasx-${StageName}-api
       RetentionInDays: 14
@@ -338,3 +448,12 @@ Outputs:
   CorpusBucket:
     Description: Versioned private source corpus bucket
     Value: !Ref CivitasCorpus
+  WebBucket:
+    Description: Private S3 bucket containing the static frontend
+    Value: !Ref CivitasWebBucket
+  WebDistributionId:
+    Description: CloudFront distribution ID for the static frontend
+    Value: !Ref CivitasWebDistribution
+  WebUrl:
+    Description: HTTPS CloudFront URL for the static frontend
+    Value: !Sub https://${CivitasWebDistribution.DomainName}

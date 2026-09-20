@@ -32,6 +32,8 @@ from .errors import ConflictError, NotFoundError
 from .models import (
     AgentMessage,
     AgentMessageRole,
+    AgentRun,
+    AgentRunStatus,
     AgentThread,
     AgentThreadDetail,
     AgentThreadStatus,
@@ -42,7 +44,9 @@ from .models import (
     ComplaintTicket,
     FollowSubject,
     PreparationApproval,
+    ProfileValue,
     Report,
+    ResidentProfile,
     ShareSnapshot,
     SourceEvidence,
     TicketDetail,
@@ -148,6 +152,162 @@ class DynamoCommunityStore:
             return json.loads(value or "")
         except (TypeError, json.JSONDecodeError):
             return default
+
+    # ---- resident profile and durable runs -------------------------------
+    def get_profile(self, owner_id: str) -> ResidentProfile:
+        items = self._query(f"USER#{owner_id}", "PROFILE#")
+        values = [
+            ProfileValue(
+                key=str(item["key"]),
+                value=str(item["value"]),
+                source=str(item.get("source", "user")),
+                confirmed=bool(item.get("confirmed", False)),
+                remember=bool(item.get("remember", True)),
+                confirmed_at=self._dt(item.get("confirmed_at"))
+                if item.get("confirmed_at")
+                else None,
+                updated_at=self._dt(item.get("updated_at")),
+            )
+            for item in sorted(items, key=lambda value: str(value.get("key", "")))
+        ]
+        return ResidentProfile(
+            items=values,
+            updated_at=max((item.updated_at for item in values), default=None),
+        )
+
+    def upsert_profile_value(
+        self,
+        owner_id: str,
+        *,
+        key: str,
+        value: str,
+        source: str = "user",
+        confirmed: bool = True,
+        remember: bool = True,
+    ) -> ProfileValue:
+        key = " ".join(key.strip().split()).lower()
+        value = " ".join(value.strip().split())
+        if not key or not value:
+            raise ValueError("Profile key and value are required")
+        now = iso_now()
+        confirmed_at = now if confirmed else None
+        if remember:
+            item = {
+                "pk": f"USER#{owner_id}",
+                "sk": f"PROFILE#{key}",
+                "entity": "profile_value",
+                "owner_id": owner_id,
+                "key": key,
+                "value": value,
+                "source": source,
+                "confirmed": confirmed,
+                "remember": remember,
+                "confirmed_at": confirmed_at,
+                "updated_at": now,
+            }
+            self._put(item)
+        return ProfileValue(
+            key=key,
+            value=value,
+            source=source,  # type: ignore[arg-type]
+            confirmed=confirmed,
+            remember=remember,
+            confirmed_at=self._dt(confirmed_at) if confirmed_at else None,
+            updated_at=self._dt(now),
+        )
+
+    def delete_profile_value(self, owner_id: str, key: str) -> None:
+        self._table.delete_item(
+            Key={"pk": f"USER#{owner_id}", "sk": f"PROFILE#{' '.join(key.strip().split()).lower()}"}
+        )
+
+    @staticmethod
+    def _run_from_item(item: dict[str, Any]) -> AgentRun:
+        receipt = item.get("receipt") or {}
+        return AgentRun(
+            id=str(item["id"]),
+            owner_id=str(item["owner_id"]),
+            thread_id=item.get("thread_id"),
+            ticket_id=item.get("ticket_id"),
+            kind=str(item["kind"]),
+            status=AgentRunStatus(str(item["status"])),
+            message=str(item["message"]),
+            connector_id=item.get("connector_id"),
+            external_reference_id=item.get("external_reference_id"),
+            receipt=receipt if isinstance(receipt, dict) else {},
+            created_at=DynamoCommunityStore._dt(item.get("created_at")),
+            updated_at=DynamoCommunityStore._dt(item.get("updated_at")),
+        )
+
+    def create_run(
+        self,
+        owner_id: str,
+        *,
+        kind: str,
+        message: str,
+        thread_id: str | None = None,
+        ticket_id: str | None = None,
+        connector_id: str | None = None,
+        status: AgentRunStatus = AgentRunStatus.QUEUED,
+        receipt: dict[str, Any] | None = None,
+    ) -> AgentRun:
+        run_id = str(uuid.uuid4())
+        now = iso_now()
+        item = {
+            "pk": f"USER#{owner_id}",
+            "sk": f"RUN#{run_id}",
+            "entity": "agent_run",
+            "id": run_id,
+            "owner_id": owner_id,
+            "thread_id": thread_id,
+            "ticket_id": ticket_id,
+            "kind": kind,
+            "status": status.value,
+            "message": message,
+            "connector_id": connector_id,
+            "receipt": receipt or {},
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._put(item, condition="attribute_not_exists(pk)")
+        return self.get_run(owner_id, run_id)
+
+    def get_run(self, owner_id: str, run_id: str) -> AgentRun:
+        item = self._get(f"USER#{owner_id}", f"RUN#{run_id}")
+        if not item:
+            raise NotFoundError("Agent run not found")
+        return self._run_from_item(item)
+
+    def list_runs(self, owner_id: str, limit: int = 30) -> list[AgentRun]:
+        items = self._query(f"USER#{owner_id}", "RUN#", ascending=False)
+        runs = [self._run_from_item(item) for item in items]
+        return sorted(runs, key=lambda value: value.updated_at, reverse=True)[: max(1, min(limit, 100))]
+
+    def update_run(
+        self,
+        owner_id: str,
+        run_id: str,
+        *,
+        status: AgentRunStatus | None = None,
+        message: str | None = None,
+        connector_id: str | None = None,
+        external_reference_id: str | None = None,
+        receipt: dict[str, Any] | None = None,
+    ) -> AgentRun:
+        self.get_run(owner_id, run_id)
+        fields: dict[str, Any] = {"updated_at": iso_now()}
+        if status is not None:
+            fields["status"] = status.value
+        if message is not None:
+            fields["message"] = message
+        if connector_id is not None:
+            fields["connector_id"] = connector_id
+        if external_reference_id is not None:
+            fields["external_reference_id"] = external_reference_id
+        if receipt is not None:
+            fields["receipt"] = receipt
+        self._update_fields(f"USER#{owner_id}", f"RUN#{run_id}", fields)
+        return self.get_run(owner_id, run_id)
 
     # ---- agent threads and attachments -----------------------------------
     def create_thread(self, owner_id: str, title: str, case_id: str | None = None) -> AgentThread:

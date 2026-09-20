@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -52,8 +52,33 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         "gba",
         "Greater Bengaluru Authority",
         "GBA public portal",
-        "https://bbmp.gov.in/",
+        "https://gba.karnataka.gov.in/",
         priority="P0",
+        capabilities=(
+            "current_officials",
+            "ward_lookup",
+            "document_index",
+            "refresh",
+        ),
+        docs_url="https://gba.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "gba-ward-lookup",
+        "gba",
+        "Greater Bengaluru Authority",
+        "GBA / BBMP current ward and city-corporation lookup",
+        "https://www.bbmp.gov.in/KnowYourNewCorporation/",
+        priority="P0",
+        capabilities=("ward_lookup", "current_corporations", "refresh"),
+        docs_url="https://www.bbmp.gov.in/KnowYourNewCorporation/",
+    ),
+    LiveEndpointSpec(
+        "gba-services-legacy",
+        "gba",
+        "Greater Bengaluru Authority",
+        "GBA public service portal",
+        "https://bbmp.gov.in/",
+        priority="P1",
         access_mode="browser_only",
         capabilities=(
             "sahaaya_grievance",
@@ -75,39 +100,122 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         "https://webapps.bbmpgov.in/ICWebApi/Help",
     ),
     LiveEndpointSpec(
+        "bbmp-property-tax-portal",
+        "gba",
+        "Greater Bengaluru Authority",
+        "BBMP property tax portal",
+        "https://bbmptax.karnataka.gov.in/login.aspx",
+        priority="P0",
+        access_mode="browser_only",
+        capabilities=(
+            "property_tax_lookup",
+            "tax_demand",
+            "payment_status",
+            "receipt_route",
+            "refresh",
+        ),
+        docs_url="https://bbmptax.karnataka.gov.in/login.aspx",
+    ),
+    LiveEndpointSpec(
+        "bbmp-property-tax-officers",
+        "gba",
+        "Greater Bengaluru Authority",
+        "BBMP property-tax officer and jurisdiction directory",
+        "https://bbmptax.karnataka.gov.in/officialsdetails.aspx",
+        priority="P1",
+        capabilities=("officer_directory", "jurisdiction_lookup", "refresh"),
+        docs_url="https://bbmptax.karnataka.gov.in/officialsdetails.aspx",
+    ),
+    LiveEndpointSpec(
+        "bbmp-property-tax-auctions",
+        "gba",
+        "Greater Bengaluru Authority",
+        "BBMP property-tax proclamation and auction notices",
+        "https://bbmptax.karnataka.gov.in/Forms/Proclamation_AuctionList.aspx",
+        priority="P1",
+        capabilities=("auction_notices", "tax_default_notices", "refresh"),
+        docs_url="https://bbmptax.karnataka.gov.in/Forms/Proclamation_AuctionList.aspx",
+    ),
+    LiveEndpointSpec(
+        "bbmp-eaasthi-citizen",
+        "gba",
+        "Greater Bengaluru Authority",
+        "BBMP e-Aasthi citizen eKhata portal",
+        "https://bbmpeaasthi.karnataka.gov.in/citizen_core/",
+        priority="P0",
+        access_mode="browser_only",
+        capabilities=("ekhata_search", "property_records", "ward_lookup", "refresh"),
+        docs_url="https://bbmpeaasthi.karnataka.gov.in/citizen_core/",
+    ),
+    LiveEndpointSpec(
+        "bbmp-eaasthi-ward-data",
+        "gba",
+        "Greater Bengaluru Authority",
+        "BBMP e-Aasthi public ward boundary data",
+        "https://bbmpeaasthi.karnataka.gov.in/citizen_core/data/ward_boundaries.json",
+        transport="json",
+        priority="P0",
+        capabilities=("ward_boundaries", "ward_statistics", "refresh"),
+        docs_url="https://bbmpeaasthi.karnataka.gov.in/citizen_core/",
+    ),
+    LiveEndpointSpec(
+        "bengaluru-gis-viewer",
+        "gba",
+        "Greater Bengaluru Authority",
+        "Bengaluru GIS viewer",
+        "https://www.bbmp.gov.in/gisviewer/",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("location_details", "ward_map", "civic_asset_map", "refresh"),
+        docs_url="https://www.bbmp.gov.in/gisviewer/",
+    ),
+    LiveEndpointSpec(
+        "bbmp-court-case-citizen",
+        "gba",
+        "Greater Bengaluru Authority",
+        "BBMP court case monitoring citizen portal",
+        "https://bbmpenyaya.karnataka.gov.in/Citizen/CitizenLogin.aspx",
+        priority="P2",
+        access_mode="browser_only",
+        capabilities=("case_lookup", "case_status", "court_document_route", "refresh"),
+        docs_url="https://bbmpenyaya.karnataka.gov.in/Citizen/CitizenLogin.aspx",
+    ),
+    LiveEndpointSpec(
         "bengaluru-open-data-gba",
         "gba",
         "Greater Bengaluru Authority",
-        "Bengaluru Open Data — GBA/BBMP datasets",
-        "https://opendata.benscl.com/?q=group/bruhat-bengaluru-mahanagara-palike",
+        "GBA official public records index",
+        "https://gba.karnataka.gov.in/",
         priority="P0",
-        capabilities=("discover_datasets", "query_public", "refresh"),
+        capabilities=("current_officials", "ward_lookup", "document_index", "refresh"),
     ),
     LiveEndpointSpec(
         "bengaluru-open-data-bmrcl",
         "bmrcl",
         "Bangalore Metro Rail Corporation Limited",
-        "Bengaluru Open Data — BMRCL datasets",
-        "https://opendata.benscl.com/?q=group/bangalore-metro-rail-corporation-limited-bmrcl",
+        "BMRCL official public records index",
+        "https://english.bmrc.co.in/",
         priority="P1",
-        capabilities=("discover_datasets", "query_public", "refresh"),
+        capabilities=("document_index", "refresh"),
     ),
     LiveEndpointSpec(
         "bengaluru-open-data-bwssb",
         "bwssb",
         "Bangalore Water Supply and Sewerage Board",
-        "Bengaluru Open Data — BWSSB datasets",
-        "https://opendata.benscl.com/?q=group/bangalore-water-supply-and-sewerage-board",
+        "BWSSB official public records index",
+        "https://bwssb.karnataka.gov.in/en",
         priority="P1",
-        capabilities=("discover_datasets", "query_public", "refresh"),
+        capabilities=("document_index", "refresh"),
     ),
     LiveEndpointSpec(
         "bengaluru-open-data-bmrcl-phase-2a",
         "bmrcl",
         "Bangalore Metro Rail Corporation Limited",
-        "BMRCL Phase 2A alternatives analysis",
-        "https://opendata.benscl.com/sites/default/files/056b88_CareerFiles.pdf",
-        transport="pdf",
+        "Legacy BMRCL Phase 2A source — verification required",
+        "https://english.bmrc.co.in/",
+        access_mode="browser_only",
+        capabilities=("document_index",),
+        refreshable=False,
     ),
     LiveEndpointSpec(
         "bmrcl-home",
@@ -164,8 +272,12 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         requires_env="CIVITAS_DATA_GOV_API_KEY",
         priority="P0",
         access_mode="api_key",
-        capabilities=("discover", "query_public", "refresh"),
+        capabilities=("discover", "query_public"),
         docs_url="https://data.gov.in/help/apis",
+        # The API requires a publisher resource ID.  The base `/resource`
+        # route is not a meaningful probe and returns 404 by design; callers
+        # use `/api/live/open-data/search` with a concrete resource ID.
+        refreshable=False,
     ),
     LiveEndpointSpec(
         "api-setu-discovery",
@@ -202,6 +314,151 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         access_mode="browser_only",
         capabilities=("discover_services", "prepare_application", "track_application"),
         docs_url="https://sevasindhu.karnataka.gov.in/Sevasindhu/English",
+    ),
+    LiveEndpointSpec(
+        "karnataka-ipgrs-grievances",
+        "karnataka",
+        "Government of Karnataka",
+        "Karnataka iPGRS grievance portal",
+        "https://ipgrs.karnataka.gov.in/",
+        priority="P0",
+        access_mode="browser_only",
+        capabilities=("discover_services", "prepare_grievance", "track_grievance", "refresh"),
+        docs_url="https://ipgrs.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "nadakacheri-ajsk-portal",
+        "karnataka",
+        "Government of Karnataka",
+        "Nadakacheri AJSK certificate services",
+        "https://nadakacheri.karnataka.gov.in/ajsk",
+        priority="P0",
+        access_mode="browser_only",
+        capabilities=(
+            "income_certificate",
+            "caste_certificate",
+            "residence_certificate",
+            "service_catalog",
+            "refresh",
+        ),
+        docs_url="https://nadakacheri.karnataka.gov.in/ajsk",
+    ),
+    LiveEndpointSpec(
+        "nadakacheri-application-status",
+        "karnataka",
+        "Government of Karnataka",
+        "Nadakacheri application status",
+        "https://ajsk.karnataka.gov.in/NK_Status",
+        priority="P0",
+        access_mode="browser_only",
+        capabilities=("application_status", "certificate_status", "refresh"),
+        docs_url="https://nadakacheri.karnataka.gov.in/ajsk",
+    ),
+    LiveEndpointSpec(
+        "sakala-service-portal",
+        "karnataka",
+        "Government of Karnataka",
+        "Karnataka Sakala service-guarantee portal",
+        "https://sakala.kar.nic.in/Onlineservices_kan.aspx",
+        priority="P0",
+        capabilities=("service_catalog", "service_deadlines", "application_status", "refresh"),
+        docs_url="https://sakala.kar.nic.in/",
+    ),
+    LiveEndpointSpec(
+        "sakala-monthly-reports",
+        "karnataka",
+        "Government of Karnataka",
+        "Karnataka Sakala public monthly reports",
+        "https://sakala.kar.nic.in/monthly_report_kan.aspx",
+        priority="P1",
+        capabilities=("service_performance_reports", "sakala_statistics", "refresh"),
+        docs_url="https://sakala.kar.nic.in/",
+    ),
+    LiveEndpointSpec(
+        "karnataka-one-services",
+        "karnataka",
+        "Government of Karnataka",
+        "KarnatakaOne citizen service catalogue",
+        "https://www.karnatakaone.gov.in/Public/Services",
+        priority="P0",
+        access_mode="browser_only",
+        capabilities=(
+            "service_catalog",
+            "service_routes",
+            "receipt_lookup",
+            "center_locator",
+            "refresh",
+        ),
+        docs_url="https://www.karnatakaone.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "ahara-pds-services",
+        "ahara",
+        "Government of Karnataka",
+        "Ahara Karnataka food and ration-card services",
+        "https://ahara.karnataka.gov.in/Home/EServices",
+        priority="P0",
+        access_mode="browser_only",
+        capabilities=(
+            "ration_card_services",
+            "application_route",
+            "status_lookup",
+            "grievance_route",
+            "refresh",
+        ),
+        docs_url="https://ahara.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "ahara-pds-ration-statistics",
+        "ahara",
+        "Government of Karnataka",
+        "Ahara ration-card and PDS statistics",
+        "https://ahara.karnataka.gov.in/fcs_office_statistics/Stat_AAY_APL_BPL_Details.aspx",
+        priority="P1",
+        capabilities=("ration_card_statistics", "pds_statistics", "refresh"),
+        docs_url="https://ahara.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "ahara-pds-distribution-statistics",
+        "ahara",
+        "Government of Karnataka",
+        "Ahara ration distribution statistics",
+        "https://ahara.karnataka.gov.in/fcs_office_statistics/stat_ration_taken_details.aspx",
+        priority="P1",
+        capabilities=("ration_distribution_statistics", "pds_statistics", "refresh"),
+        docs_url="https://ahara.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "ejanma-certificate-search",
+        "ejanma",
+        "Government of Karnataka",
+        "eJanMa birth and death certificate verification",
+        "https://ejanma.karnataka.gov.in/frmBirthDeathSearch.aspx",
+        priority="P0",
+        access_mode="browser_only",
+        capabilities=("birth_certificate_verify", "death_certificate_verify", "refresh"),
+        docs_url="https://ejanma.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "ejanma-application-status",
+        "ejanma",
+        "Government of Karnataka",
+        "eJanMa birth/death application status",
+        "https://ejanma.karnataka.gov.in/frmApplicationStatus.aspx",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("application_status", "refresh"),
+        docs_url="https://ejanma.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "ejanma-vital-statistics",
+        "ejanma",
+        "Government of Karnataka",
+        "eJanMa vital statistics and registration counts",
+        "https://ejanma.karnataka.gov.in/frmBirthDeathcount.aspx",
+        priority="P1",
+        capabilities=("vital_statistics", "registration_counts", "refresh"),
+        docs_url="https://ejanma.karnataka.gov.in/",
     ),
     LiveEndpointSpec(
         "cpgrams-grievances",
@@ -287,11 +544,33 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         docs_url="https://eswathu.karnataka.gov.in/",
     ),
     LiveEndpointSpec(
+        "karnataka-rtc-services",
+        "bhoomi",
+        "Government of Karnataka",
+        "Karnataka RTC citizen services",
+        "https://rtc.karnataka.gov.in/Service78/",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("rtc_lookup", "mutation_route", "land_record_service", "refresh"),
+        docs_url="https://rtc.karnataka.gov.in/Service78/",
+    ),
+    LiveEndpointSpec(
+        "karnataka-rtc-citizen",
+        "bhoomi",
+        "Government of Karnataka",
+        "Karnataka RTC citizen application",
+        "https://rtc.karnataka.gov.in/Service78/RTC.aspx",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("rtc_lookup", "mutation_lookup", "refresh"),
+        docs_url="https://rtc.karnataka.gov.in/Service78/",
+    ),
+    LiveEndpointSpec(
         "mojini-survey",
         "mojini",
         "Government of Karnataka",
         "Mojini land survey services",
-        "https://www.mojini.karnataka.gov.in/",
+        "https://bhoomojini.karnataka.gov.in/",
         priority="P1",
         access_mode="browser_only",
         capabilities=("survey_lookup", "application_status"),
@@ -320,11 +599,33 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         docs_url="https://bmtc.co.in/",
     ),
     LiveEndpointSpec(
+        "ksrtc-portal",
+        "ksrtc",
+        "Karnataka State Road Transport Corporation",
+        "KSRTC public transport portal",
+        "https://ksrtc.in/",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("bus_service_routes", "ticket_route", "service_notices", "refresh"),
+        docs_url="https://ksrtc.in/",
+    ),
+    LiveEndpointSpec(
+        "ksrtc-booking-enquiry",
+        "ksrtc",
+        "Karnataka State Road Transport Corporation",
+        "KSRTC booking enquiry",
+        "https://ksrtc.in/booking-enquiry",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("booking_status", "ticket_enquiry", "refresh"),
+        docs_url="https://ksrtc.in/",
+    ),
+    LiveEndpointSpec(
         "bwssb-water-services",
         "bwssb",
         "Bangalore Water Supply and Sewerage Board",
         "BWSSB water complaints and services",
-        "https://bwssb.gov.in/",
+        "https://owcv2.bwssb.gov.in/consumer",
         priority="P1",
         access_mode="browser_only",
         capabilities=("complaint_prepare", "service_status", "bill_lookup"),
@@ -340,6 +641,65 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         access_mode="browser_only",
         capabilities=("outage_status", "complaint_prepare", "bill_lookup"),
         docs_url="https://bescom.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "bescom-complaint-tracker",
+        "bescom",
+        "Bangalore Electricity Supply Company",
+        "BESCOM complaint tracker",
+        "https://www.bescom.co.in/bescom/dashboard/consumer-dashboard/track-complaints",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("complaint_status", "billing_complaint_status", "refresh"),
+        docs_url="https://www.bescom.co.in/",
+    ),
+    LiveEndpointSpec(
+        "bescom-service-dashboard",
+        "bescom",
+        "Bangalore Electricity Supply Company",
+        "BESCOM consumer service dashboard",
+        "https://www.bescom.co.in/bescom/dashboard/consumer-dashboard/my-services",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=(
+            "service_status",
+            "bill_statement_route",
+            "connection_service_route",
+            "refresh",
+        ),
+        docs_url="https://www.bescom.co.in/",
+    ),
+    LiveEndpointSpec(
+        "bengaluru-city-police",
+        "bengaluru-police",
+        "Bengaluru City Police",
+        "Bengaluru City Police citizen portal",
+        "https://bcp.karnataka.gov.in/en",
+        priority="P1",
+        capabilities=("police_notices", "citizen_service_routes", "public_information", "refresh"),
+        docs_url="https://bcp.karnataka.gov.in/en",
+    ),
+    LiveEndpointSpec(
+        "karnataka-police-e-lost-reports",
+        "karnataka-police",
+        "Karnataka State Police",
+        "Karnataka Police e-Lost reports",
+        "https://kspapp.ksp.gov.in/ksp/api/elost-reports",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("lost_report_lookup", "lost_document_route", "refresh"),
+        docs_url="https://bcp.karnataka.gov.in/en",
+    ),
+    LiveEndpointSpec(
+        "karnataka-land-resource-inventory",
+        "karnataka",
+        "Government of Karnataka",
+        "Karnataka Sujala land-resource inventory portal",
+        "https://sujala3lri.karnataka.gov.in/",
+        priority="P2",
+        access_mode="browser_only",
+        capabilities=("land_resource_inventory", "watershed_information", "refresh"),
+        docs_url="https://sujala3lri.karnataka.gov.in/",
     ),
     LiveEndpointSpec(
         "myscheme-discovery",
@@ -377,6 +737,171 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         refreshable=False,
     ),
     LiveEndpointSpec(
+        "karnataka-professional-tax",
+        "karnataka",
+        "Government of Karnataka",
+        "Karnataka professional tax portal",
+        "https://ptax.karnataka.gov.in/",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("professional_tax_services", "enrolment_route", "payment_route", "refresh"),
+        docs_url="https://ptax.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "k-gis-portal",
+        "karnataka",
+        "Government of Karnataka",
+        "Karnataka GIS portal",
+        "https://kgis.ksrsac.in/kgis/",
+        priority="P0",
+        capabilities=("gis_catalog", "metadata", "web_api_discovery", "refresh"),
+        docs_url="https://kgis.ksrsac.in/kgis/aboutkgis.aspx",
+    ),
+    LiveEndpointSpec(
+        "k-gis-bda-map-metadata",
+        "bda",
+        "Bangalore Development Authority",
+        "K-GIS BDA spatial layer metadata",
+        "https://kgis.ksrsac.in/kgismaps2/rest/services/BDA/BDA/MapServer?f=pjson",
+        transport="json",
+        priority="P0",
+        capabilities=("bda_spatial_layers", "layer_metadata", "refresh"),
+        docs_url="https://kgis.ksrsac.in/kgis/",
+    ),
+    LiveEndpointSpec(
+        "k-gis-bda-layout-layer",
+        "bda",
+        "Bangalore Development Authority",
+        "K-GIS BDA layout-boundary layer metadata",
+        "https://kgis.ksrsac.in/kgismaps2/rest/services/BDA/BDA/MapServer/9?f=pjson",
+        transport="json",
+        priority="P0",
+        capabilities=("layout_boundaries", "layer_fields", "refresh"),
+        docs_url="https://kgis.ksrsac.in/kgis/",
+    ),
+    LiveEndpointSpec(
+        "k-gis-watershed-wms",
+        "karnataka",
+        "Government of Karnataka",
+        "K-GIS watershed WMS capabilities",
+        "https://kgis.ksrsac.in/kgismaps1/services/NR_V2/Watershed/MapServer/WMSServer?request=GetCapabilities&service=WMS",
+        priority="P1",
+        capabilities=("watershed_layers", "map_capabilities", "refresh"),
+        docs_url="https://kgis.ksrsac.in/kgis/",
+    ),
+    LiveEndpointSpec(
+        "rera-karnataka-portal",
+        "rera-karnataka",
+        "Karnataka Real Estate Regulatory Authority",
+        "Karnataka RERA public portal",
+        "https://rera.karnataka.gov.in/",
+        priority="P1",
+        capabilities=("project_search", "agent_search", "complaint_search", "orders", "refresh"),
+        docs_url="https://rera.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "rera-karnataka-projects",
+        "rera-karnataka",
+        "Karnataka Real Estate Regulatory Authority",
+        "Karnataka RERA registered projects",
+        "https://rera.karnataka.gov.in/viewAllProjects",
+        priority="P1",
+        capabilities=("project_search", "registered_project_records", "refresh"),
+        docs_url="https://rera.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "rera-karnataka-complaints",
+        "rera-karnataka",
+        "Karnataka Real Estate Regulatory Authority",
+        "Karnataka RERA complaints and orders",
+        "https://rera.karnataka.gov.in/viewAllComplaints",
+        priority="P1",
+        capabilities=("complaint_search", "complaint_status", "orders", "refresh"),
+        docs_url="https://rera.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "rera-karnataka-cause-list",
+        "rera-karnataka",
+        "Karnataka Real Estate Regulatory Authority",
+        "Karnataka RERA project cause list",
+        "https://rera.karnataka.gov.in/projectDailyCauseList",
+        priority="P2",
+        capabilities=("cause_list", "hearing_information", "refresh"),
+        docs_url="https://rera.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "kspcb-environment-portal",
+        "kspcb",
+        "Karnataka State Pollution Control Board",
+        "KSPCB environmental portal",
+        "https://kspcb.karnataka.gov.in/",
+        priority="P1",
+        capabilities=("environmental_notices", "consent_guidance", "reports", "refresh"),
+        docs_url="https://kspcb.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "kspcb-e-citizen",
+        "kspcb",
+        "Karnataka State Pollution Control Board",
+        "KSPCB e-citizen information",
+        "https://kspcb.karnataka.gov.in/index.php/e-citizen",
+        priority="P1",
+        capabilities=("public_complaint_route", "environmental_services", "refresh"),
+        docs_url="https://kspcb.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "karnataka-housing-board",
+        "khb",
+        "Karnataka Housing Board",
+        "Karnataka Housing Board schemes and public notices",
+        "https://khb.karnataka.gov.in/",
+        priority="P1",
+        capabilities=("housing_schemes", "public_notices", "application_routes", "refresh"),
+        docs_url="https://khb.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "ceo-karnataka-portal",
+        "karnataka",
+        "Chief Electoral Officer, Karnataka",
+        "Chief Electoral Officer Karnataka portal",
+        "https://ceo.karnataka.gov.in/",
+        priority="P1",
+        capabilities=("electoral_notices", "roll_download_route", "polling_information", "refresh"),
+        docs_url="https://ceo.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "eci-karnataka-electoral-roll",
+        "election-commission",
+        "Election Commission of India",
+        "Karnataka electoral-roll download route",
+        "https://voters.eci.gov.in/download-eroll?stateCode=S10",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("electoral_roll_download", "state_roll_selection", "refresh"),
+        docs_url="https://voters.eci.gov.in/download-eroll?stateCode=S10",
+    ),
+    LiveEndpointSpec(
+        "eci-elector-search",
+        "election-commission",
+        "Election Commission of India",
+        "ECI elector search portal",
+        "https://electoralsearch.eci.gov.in/",
+        priority="P1",
+        access_mode="browser_only",
+        capabilities=("elector_search", "polling_station_route", "refresh"),
+        docs_url="https://electoralsearch.eci.gov.in/",
+    ),
+    LiveEndpointSpec(
+        "karsec-local-elections",
+        "karsec",
+        "State Election Commission, Karnataka",
+        "Karnataka local-body election portal",
+        "https://karsec.karnataka.gov.in/",
+        priority="P1",
+        capabilities=("local_election_notices", "results_route", "roll_route", "refresh"),
+        docs_url="https://karsec.karnataka.gov.in/",
+    ),
+    LiveEndpointSpec(
         "udyam-registration",
         "udyam",
         "Ministry of Micro, Small and Medium Enterprises",
@@ -403,7 +928,7 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         "karnataka-eprocurement",
         "Government of Karnataka",
         "Karnataka e-Procurement portal",
-        "https://eproc.karnataka.gov.in/",
+        "https://eproc.karnataka.gov.in/eprocportal/pages/index.jsp",
         priority="P2",
         access_mode="browser_only",
         capabilities=("tender_search", "tender_document"),
@@ -456,7 +981,7 @@ LIVE_ENDPOINTS: tuple[LiveEndpointSpec, ...] = (
         "ncs",
         "Ministry of Labour and Employment",
         "National Career Service jobs and skills",
-        "https://www.ncs.gov.in/",
+        "https://ncs.gov.in/",
         priority="P2",
         access_mode="browser_only",
         capabilities=("job_search", "skill_service_discovery", "application_route"),
@@ -478,30 +1003,62 @@ def _allowlisted(url: str) -> bool:
         "bbmp.gov.in",
         "www.bbmp.gov.in",
         "webapps.bbmpgov.in",
-        "opendata.benscl.com",
+        "gba.karnataka.gov.in",
         "english.bmrc.co.in",
         "eng.bdabangalore.org",
+        "bdakarnataka.in",
+        "kbda.karnataka.gov.in",
+        "bbmptax.karnataka.gov.in",
+        "bbmpeaasthi.karnataka.gov.in",
+        "bbmpenyaya.karnataka.gov.in",
+        "kgis.ksrsac.in",
         "karnataka.data.gov.in",
         "api.data.gov.in",
         "docs.apisetu.gov.in",
         "apisetu.gov.in",
         "sevasindhu.karnataka.gov.in",
+        "ipgrs.karnataka.gov.in",
+        "www.karnatakaone.gov.in",
+        "ahara.karnataka.gov.in",
+        "ejanma.karnataka.gov.in",
         "www.pgportal.gov.in",
         "pgportal.gov.in",
         "parivahan.gov.in",
         "sarathi.parivahan.gov.in",
         "echallan.parivahan.gov.in",
         "landrecords.karnataka.gov.in",
+        "rtc.karnataka.gov.in",
         "kaveri.karnataka.gov.in",
         "eswathu.karnataka.gov.in",
-        "www.mojini.karnataka.gov.in",
+        "bhoomojini.karnataka.gov.in",
         "services.ecourts.gov.in",
         "bmtc.co.in",
+        "majestic.bmtc.co.in",
+        "ksrtc.in",
         "bwssb.gov.in",
+        "www.bwssb.gov.in",
+        "bwssb.karnataka.gov.in",
+        "owcv2.bwssb.gov.in",
         "bescom.karnataka.gov.in",
+        "www.bescom.co.in",
+        "bcp.karnataka.gov.in",
+        "kspapp.ksp.gov.in",
+        "sujala3lri.karnataka.gov.in",
         "www.myscheme.gov.in",
+        "ncs.gov.in",
         "web.umang.gov.in",
         "www.gst.gov.in",
+        "ptax.karnataka.gov.in",
+        "nadakacheri.karnataka.gov.in",
+        "ajsk.karnataka.gov.in",
+        "sakala.kar.nic.in",
+        "rera.karnataka.gov.in",
+        "kspcb.karnataka.gov.in",
+        "khb.karnataka.gov.in",
+        "ceo.karnataka.gov.in",
+        "voters.eci.gov.in",
+        "electoralsearch.eci.gov.in",
+        "karsec.karnataka.gov.in",
         "udyamregistration.gov.in",
         "www.mca.gov.in",
         "eproc.karnataka.gov.in",
@@ -510,6 +1067,45 @@ def _allowlisted(url: str) -> bool:
         "nad.digilocker.gov.in",
         "www.ncs.gov.in",
     }
+
+
+def _fetch_allowlisted_source(
+    client: httpx.Client,
+    url: str,
+    *,
+    max_bytes: int,
+) -> tuple[bytes, str]:
+    """Fetch a source while allowing only bounded, allowlisted redirects.
+
+    Government portals commonly move from a legacy hostname to a current
+    official hostname.  Following arbitrary redirects would undermine the
+    connector allowlist, so every redirect target is validated before another
+    request is made.
+    """
+
+    current_url = url
+    for _ in range(4):
+        with client.stream("GET", current_url) as response:
+            if 300 <= response.status_code < 400:
+                location = response.headers.get("location")
+                target = urljoin(current_url, location or "")
+                if not _allowlisted(target):
+                    raise ValueError(
+                        "Redirects are disabled for live civic sources unless the target "
+                        "is on the CivitasX allowlist"
+                    )
+                current_url = target
+                continue
+            response.raise_for_status()
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in response.iter_bytes():
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ValueError(f"Response exceeds {max_bytes} byte safety limit")
+                chunks.append(chunk)
+            return b"".join(chunks), response.headers.get("content-type", "")
+    raise ValueError("Live civic source returned too many redirects")
 
 
 class LiveConnectorRegistry:
@@ -584,14 +1180,26 @@ class LiveConnectorRegistry:
             )
             latest_source = max(
                 (index.documents[source_id] for source_id in source_ids),
-                key=lambda document: document.retrieved_at or datetime.min.replace(tzinfo=UTC),
+                key=lambda document: (
+                    document.published_at is not None,
+                    document.published_at
+                    or document.retrieved_at
+                    or datetime.min.replace(tzinfo=UTC),
+                ),
                 default=None,
             )
             extraction_status = latest_source.extraction_status if latest_source else "unknown"
             if previous:
                 profiles.append(
-                    previous.model_copy(
-                        update={
+                    LiveEndpointProfile.model_validate(
+                        {
+                            **previous.model_dump(mode="json"),
+                            "authority_id": spec.authority_id,
+                            "authority_name": spec.authority_name,
+                            "title": spec.title,
+                            "url": spec.url,
+                            "source_kind": spec.source_kind,
+                            "transport": spec.transport,
                             "priority": spec.priority,
                             "access_mode": spec.access_mode,
                             "capabilities": list(spec.capabilities),
@@ -716,25 +1324,49 @@ class LiveConnectorRegistry:
                 if spec.access_mode == "consent_required"
                 else "approval_required"
                 if spec.access_mode == "approval_required"
+                else "requires_api_key"
+                if spec.access_mode == "api_key" and not self._credential(spec.requires_env or "")
+                else "unknown"
+                if spec.access_mode == "api_key"
                 else "browser_only"
             )
+            if spec.access_mode == "api_key":
+                message = (
+                    "No request was sent; this connector is query-only. Set "
+                    f"{spec.requires_env} and provide a resource ID through the India OGD "
+                    "search route."
+                )
+                error = (
+                    "Set the configured API key before querying this connector"
+                    if status == "requires_api_key"
+                    else "Query-only connector; use the resource search route with a resource ID"
+                )
+            else:
+                if spec.access_mode == "browser_only":
+                    message = (
+                        "No request was sent; this source requires a browser-backed connector "
+                        "and is not refreshable by the bounded HTTP reader."
+                    )
+                    error = "Browser-only connector is not refreshable by the bounded HTTP reader"
+                else:
+                    message = (
+                        "No request was sent. Complete the official approval/consent flow and "
+                        "configure the connector credentials first."
+                    )
+                    error = (
+                        "This connector is metadata-only until the official approval or consent "
+                        "flow is configured"
+                    )
             profile = self._save_status(
                 spec,
                 status=status,
                 checked_at=checked_at,
-                error=(
-                    "This connector is metadata-only until the official approval or consent flow "
-                    "is configured"
-                ),
+                error=error,
                 source_ids=[],
             )
             return LiveRefreshResult(
                 endpoint=profile,
-                message=(
-                    "No request was sent. Complete the official approval/consent flow and "
-                    "configure "
-                    "the connector credentials first."
-                ),
+                message=message,
             )
         if spec.access_mode == "approval_required" and not self._credential(
             spec.requires_env or ""
@@ -794,19 +1426,11 @@ class LiveConnectorRegistry:
                     "Accept": "text/html,application/pdf,application/json,text/plain,*/*",
                 },
             ) as client:
-                with client.stream("GET", spec.url) as response:
-                    if 300 <= response.status_code < 400:
-                        raise ValueError("Redirects are disabled for live civic sources")
-                    response.raise_for_status()
-                    chunks: list[bytes] = []
-                    total = 0
-                    for chunk in response.iter_bytes():
-                        total += len(chunk)
-                        if total > self.max_bytes:
-                            raise ValueError(f"Response exceeds {self.max_bytes} byte safety limit")
-                        chunks.append(chunk)
-                    raw = b"".join(chunks)
-                    content_type = response.headers.get("content-type", "")
+                raw, content_type = _fetch_allowlisted_source(
+                    client,
+                    str(spec.url),
+                    max_bytes=self.max_bytes,
+                )
             pages, method, extraction_status = DocumentIngestor().extract(
                 raw, content_type=content_type, language="en"
             )

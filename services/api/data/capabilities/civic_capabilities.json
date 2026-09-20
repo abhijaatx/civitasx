@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "capabilities": [
+    {
+      "id": "safety.emergency",
+      "label": "Immediate safety or emergency",
+      "phrases": ["happening now", "right now", "immediate danger", "missing child", "child has gone missing", "gone missing", "assault", "harassment right now", "someone is attacking"],
+      "required_slots": [],
+      "mode": "deterministic",
+      "authority_id": "emergency",
+      "tools": [],
+      "response_contract": "prioritize emergency assistance and immediate safety"
+    },
+    {
+      "id": "police.jurisdiction",
+      "label": "Police station or theft routing",
+      "phrases": ["police station", "which station", "police jurisdiction", "outside its jurisdiction", "boundary between", "file a complaint", "file complaint", "police complaint", "fir", "stolen", "theft", "snatched", "break into", "broke into", "suspicious activity", "online fraud", "lost phone", "stolen phone", "lost mobile", "stolen mobile"],
+      "required_slots": ["incident_location"],
+      "mode": "deterministic",
+      "authority_id": "bengaluru-police",
+      "tools": ["resolve_police_jurisdiction"],
+      "response_contract": "name only an evidence-backed station; rank alternatives when ambiguous"
+    },
+    {
+      "id": "research.official_record",
+      "label": "Official document or policy research",
+      "phrases": ["official record", "official document", "research", "what does the record", "what does the official", "policy", "what changed", "walking routes"],
+      "required_slots": [],
+      "mode": "indexed",
+      "authority_id": null,
+      "tools": ["search_official_records"],
+      "response_contract": "answer only from cited, page-addressable evidence"
+    },
+    {
+      "id": "research.current_directory",
+      "label": "Current ward or official directory",
+      "phrases": ["current ward", "current wards", "ward list", "latest official ward", "city corporation", "current mayor", "current commissioner", "current officeholder", "who runs the city"],
+      "required_slots": [],
+      "mode": "live",
+      "authority_id": "gba",
+      "tools": ["list_current_wards", "get_current_officials"],
+      "response_contract": "report live-source availability and freshness; never infer current officeholders"
+    },
+    {
+      "id": "planning.zoning",
+      "label": "Planning, zoning, or building approval",
+      "phrases": ["zoning", "land use", "building plan", "building approval", "illegal construction", "extra floor", "occupancy certificate", "master plan", "plot", "construction permission", "private construction", "park is being used"],
+      "required_slots": ["incident_location"],
+      "mode": "indexed_or_connector",
+      "authority_id": "bda",
+      "tools": ["resolve_ward_and_authority", "search_official_records"],
+      "response_contract": "distinguish general policy from parcel-specific approval status"
+    },
+    {
+      "id": "civic.road_or_footpath",
+      "label": "Road, pothole, manhole, or footpath issue",
+      "phrases": ["pothole", "road", "footpath", "sidewalk", "manhole", "pedestrian", "zebra crossing", "road sign", "parking on the footpath", "parked illegally", "traffic signal", "parked vehicles"],
+      "required_slots": ["incident_location"],
+      "mode": "connector_required",
+      "authority_id": "gba",
+      "tools": ["resolve_ward_and_authority", "draft_complaint_ticket"],
+      "response_contract": "route or draft safely; do not claim a municipal ticket was filed"
+    },
+    {
+      "id": "civic.water_or_drainage",
+      "label": "Water, sewage, drain, or flooding issue",
+      "phrases": ["no water", "water pressure", "muddy water", "brown and muddy", "sewage", "drain", "flooding", "rainwater", "water leak", "water pipe", "borewell", "water tanker", "tanker is charging"],
+      "required_slots": ["incident_location"],
+      "mode": "connector_required",
+      "authority_id": "bwssb",
+      "tools": ["resolve_ward_and_authority", "draft_complaint_ticket"],
+      "response_contract": "route or draft safely; ask for exact location before jurisdiction claims"
+    },
+    {
+      "id": "civic.waste",
+      "label": "Waste, dumping, or public cleanliness",
+      "phrases": ["garbage", "waste", "dumping", "construction debris", "public toilet", "plastic burning", "e waste", "old laptop", "batteries", "dog waste", "dead animal"],
+      "required_slots": ["incident_location"],
+      "mode": "connector_required",
+      "authority_id": "gba",
+      "tools": ["resolve_ward_and_authority", "draft_complaint_ticket"],
+      "response_contract": "route or draft safely; avoid claiming collection status without a live record"
+    },
+    {
+      "id": "civic.electricity_or_lighting",
+      "label": "Electricity, transformer, cable, or streetlight issue",
+      "phrases": ["streetlight", "lane becomes dark", "power cut", "power outage", "electric wire", "electric pole", "transformer", "sparking", "cable", "solar streetlight"],
+      "required_slots": ["incident_location"],
+      "mode": "connector_required",
+      "authority_id": "bescom",
+      "tools": ["resolve_ward_and_authority", "draft_complaint_ticket"],
+      "response_contract": "prioritize danger warnings and route or draft without claiming repair"
+    },
+    {
+      "id": "transport.service",
+      "label": "Bus, metro, traffic, or transit access",
+      "phrases": ["bus route", "buses are passing", "bus stop", "bus shelter", "metro station", "metro lift", "auto driver", "traffic diversion", "public transport", "railway crossing"],
+      "required_slots": ["incident_location"],
+      "mode": "connector_required",
+      "authority_id": "bmrcl",
+      "tools": ["resolve_ward_and_authority", "search_official_records", "draft_complaint_ticket"],
+      "response_contract": "separate indexed policy from current service status"
+    },
+    {
+      "id": "government.document_service",
+      "label": "Certificate, tax, khata, voter, or government document",
+      "phrases": ["property tax", "khata", "birth certificate", "death certificate", "voter id", "trade licence", "street vendor", "municipal document", "rti"],
+      "required_slots": [],
+      "mode": "connector_required",
+      "authority_id": "gba",
+      "tools": ["list_live_official_sources", "draft_complaint_ticket"],
+      "response_contract": "give the official route and disclose when status lookup is unavailable"
+    },
+    {
+      "id": "environment.health.accessibility",
+      "label": "Environment, public health, animals, or accessibility",
+      "phrases": ["mosquito", "stray dog", "dog bite", "smoke", "air pollution", "dust from the construction", "wheelchair", "tactile paving", "school crossing", "loud event", "noise", "tree", "lake", "construction work continues"],
+      "required_slots": ["incident_location"],
+      "mode": "connector_required",
+      "authority_id": "gba",
+      "tools": ["resolve_ward_and_authority", "draft_complaint_ticket"],
+      "response_contract": "provide safety guidance and a clearly bounded complaint route"
+    },
+    {
+      "id": "complaint.private_draft",
+      "label": "Private complaint drafting",
+      "phrases": ["draft a complaint", "draft the complaint", "prepare a complaint", "private complaint", "draft complaint", "complaint draft", "prepare a private", "keep my identity", "keep my attachments private"],
+      "required_slots": ["incident_location"],
+      "mode": "draft",
+      "authority_id": "gba",
+      "tools": ["draft_complaint_ticket"],
+      "response_contract": "return a private draft and never claim external submission"
+    },
+    {
+      "id": "privacy.action_boundary",
+      "label": "External submission or publication request",
+      "phrases": ["post my complaint", "submit it", "file it for me", "file the complaint for me", "file the complaint", "publish this", "send this to the government", "right now"],
+      "required_slots": [],
+      "mode": "approval_required",
+      "authority_id": null,
+      "tools": [],
+      "response_contract": "show the exact proposed action, require approval, and verify a receipt"
+    },
+    {
+      "id": "conversation.memory",
+      "label": "Verified follow-up context",
+      "phrases": ["same location", "previous message", "previous evidence", "update the incident time", "from my previous", "yesterday"],
+      "required_slots": [],
+      "mode": "deterministic",
+      "authority_id": null,
+      "tools": [],
+      "response_contract": "reuse only verified thread context and ask when the reference is ambiguous"
+    },
+    {
+      "id": "attachment.private",
+      "label": "Private attachment inspection",
+      "phrases": ["uploaded a photo", "uploaded the photo", "private metadata", "attachments", "uploaded report"],
+      "required_slots": ["attachment"],
+      "mode": "deterministic",
+      "authority_id": null,
+      "tools": ["inspect_private_attachments"],
+      "response_contract": "inspect only owner-scoped attachments and do not expose private metadata"
+    },
+    {
+      "id": "language.translation",
+      "label": "Multilingual answer or complaint",
+      "phrases": ["in kannada", "in hindi", "in english", "english complaint draft", "translate"],
+      "required_slots": [],
+      "mode": "deterministic",
+      "authority_id": null,
+      "tools": [],
+      "response_contract": "preserve the evidence and provide the requested language version"
+    }
+  ]
+}

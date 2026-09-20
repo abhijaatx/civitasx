@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_version: str = "0.1.0"
     frontend_origin: str = "http://localhost:5173"
+    # Comma-separated host/origin allowlists used by the Streamable HTTP MCP
+    # transport. Keep these explicit so DNS-rebinding protection stays on.
+    mcp_allowed_hosts: str = "localhost:*,127.0.0.1:*"
+    mcp_allowed_origins: str = ""
 
     auth_mode: str = "local"
     # Optional local-pilot recovery secret. Keep unset in deployments that use
@@ -48,6 +52,12 @@ class Settings(BaseSettings):
     # deployed build can point this at a packaged or refreshed manifest without
     # changing the research API.
     corpus_path: str = "data/corpus/manifest.json"
+    police_registry_path: str = "data/police/bengaluru_stations.json"
+    capability_registry_path: str = "data/capabilities/civic_capabilities.json"
+    opa_url: str | None = None
+    spatial_database_url: str | None = None
+    temporal_target: str | None = None
+    telemetry_enabled: bool = False
     translation_cache_path: str = ".civitas/translation-cache.json"
     live_cache_path: str = ".civitas/live-sources.json"
     live_cache_bucket: str | None = None
@@ -65,6 +75,7 @@ class Settings(BaseSettings):
     ollama_model: str = "hermes3:8b"
     agent_max_iterations: int = Field(default=8, ge=1, le=16)
     agent_request_timeout_seconds: int = Field(default=90, ge=5, le=300)
+    agent_tool_timeout_seconds: int = Field(default=30, ge=3, le=120)
     agent_provider_retries: int = Field(default=3, ge=1, le=5)
     agent_context_max_chars: int = Field(default=48000, ge=8000, le=200000)
     agent_context_keep_messages: int = Field(default=12, ge=4, le=40)
@@ -99,6 +110,23 @@ class Settings(BaseSettings):
     max_model_cost_per_case_usd: float = Field(default=2.0, ge=0)
     max_browser_seconds_per_case: int = Field(default=300, ge=1)
     max_browser_actions_per_attempt: int = Field(default=30, ge=1)
+    # Only enables the local synthetic connector used for deterministic
+    # end-to-end tests. Real government submission remains connector-gated.
+    demo_submission_enabled: bool = False
+    # Enables the reviewed Karnataka iPGRS browser connector. It opens the
+    # official form, fills approved fields, and pauses for resident OTP/CAPTCHA
+    # interaction before any final submission.
+    ipgrs_submission_enabled: bool = False
+    ipgrs_browser_url: str = "https://ipgrs.karnataka.gov.in/Citizens/GrievanceSelfService"
+    ipgrs_browser_headless: bool = False
+    # A certified authority API can be enabled without changing the agent or
+    # ticket workflow. Keep this unset until the authority/API gateway has
+    # issued a real endpoint and scoped credential for this use case.
+    official_api_authority_id: str = "gba"
+    official_api_url: str | None = None
+    official_api_status_url: str | None = None
+    official_api_token: str | None = None
+    official_api_timeout_seconds: int = Field(default=30, ge=3, le=120)
 
     @field_validator("auth_mode")
     @classmethod
@@ -135,6 +163,20 @@ class Settings(BaseSettings):
             return path
         # Resolve relative to the API package so `uvicorn` works from either
         # the repository root or services/api.
+        return (Path(__file__).resolve().parents[2] / path).resolve()
+
+    @property
+    def police_registry(self) -> Path:
+        path = Path(self.police_registry_path).expanduser()
+        if path.is_absolute():
+            return path
+        return (Path(__file__).resolve().parents[2] / path).resolve()
+
+    @property
+    def capability_registry(self) -> Path:
+        path = Path(self.capability_registry_path).expanduser()
+        if path.is_absolute():
+            return path
         return (Path(__file__).resolve().parents[2] / path).resolve()
 
     @property

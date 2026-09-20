@@ -6,9 +6,16 @@ from contextvars import ContextVar
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
+from .community_store import redact_public_text
 from .config import get_settings
-from .models import User
+from .models import (
+    AgentRunStatus,
+    SendAgentMessageRequest,
+    User,
+)
+from .policy import PolicyEngine
 
 _mcp_user: ContextVar[User | None] = ContextVar("civitas_mcp_user", default=None)
 
@@ -34,17 +41,33 @@ def _store():
     return get_store()
 
 
+def _csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _transport_security() -> TransportSecuritySettings:
+    settings = get_settings()
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=_csv(settings.mcp_allowed_hosts),
+        allowed_origins=_csv(settings.mcp_allowed_origins),
+    )
+
+
 mcp = FastMCP(
     name="CivitasX",
     instructions=(
         "CivitasX tools answer Bengaluru civic questions from indexed public records "
         "and create or inspect a resident's private case. Use only the authenticated "
         "user's cases; do not request or invent owner IDs. Every material claim "
-        "must resolve to a returned source passage."
+        "must resolve to a returned source passage. External submissions and public "
+        "posts require an exact, hash-bound approval; a draft or preparation is not "
+        "a submission. Long actions return a durable run ID."
     ),
     stateless_http=True,
     json_response=True,
     streamable_http_path="/",
+    transport_security=_transport_security(),
 )
 
 
@@ -63,7 +86,11 @@ def get_civitas_status() -> dict[str, Any]:
         "phase": 8,
         "capabilities": {
             "research": True,
-            "submission": False,
+            "submission": bool(
+                settings.demo_submission_enabled
+                or settings.ipgrs_submission_enabled
+                or (settings.official_api_url and settings.official_api_token)
+            ),
             "feed": True,
             "agent": True,
             "tickets": True,
@@ -71,6 +98,7 @@ def get_civitas_status() -> dict[str, Any]:
             "moderation": True,
             "comparisons": True,
             "preparation": True,
+            "mcp_agent_actions": True,
             "live_sources": True,
         },
         "limits": {
@@ -82,6 +110,556 @@ def get_civitas_status() -> dict[str, Any]:
         "usage": usage,
         "research_indexed_documents": get_research_index().document_count,
     }
+
+
+@mcp.tool(
+    name="get_resident_profile",
+    title="Get my remembered profile",
+    description="Read the authenticated resident's confirmed reusable form details.",
+)
+def get_resident_profile() -> dict[str, Any]:
+    user = get_mcp_user()
+    return _community().get_profile(user.id).model_dump(mode="json")
+
+
+@mcp.tool(
+    name="remember_profile_value",
+    title="Remember a profile value",
+    description=(
+        "Save a resident-provided form value for future tasks. Use only after the "
+        "resident confirms the value and explicitly asks to remember it."
+    ),
+)
+def remember_profile_value(
+    key: str,
+    value: str,
+    source: str = "user",
+    confirmed: bool = True,
+    remember: bool = True,
+) -> dict[str, Any]:
+    user = get_mcp_user()
+    return _community().upsert_profile_value(
+        user.id,
+        key=key,
+        value=value,
+        source=source,
+        confirmed=confirmed,
+        remember=remember,
+    ).model_dump(mode="json")
+
+
+@mcp.tool(
+    name="forget_profile_value",
+    title="Forget a profile value",
+    description="Delete one remembered resident profile value.",
+)
+def forget_profile_value(key: str) -> dict[str, Any]:
+    user = get_mcp_user()
+    _community().delete_profile_value(user.id, key)
+    return {"deleted": True, "key": key}
+
+
+def _community():
+    from .main import get_community_store
+
+    return get_community_store()
+
+
+@mcp.tool(
+    name="list_agent_threads",
+    title="List agent conversations",
+    description="List the authenticated resident's persistent CivitasX agent conversations.",
+)
+def list_agent_threads(limit: int = 30) -> dict[str, Any]:
+    user = get_mcp_user()
+    return {
+        "items": [
+            item.model_dump(mode="json")
+            for item in _community().list_threads(user.id, limit)
+        ]
+    }
+
+
+@mcp.tool(
+    name="create_agent_thread",
+    title="Start an agent conversation",
+    description="Create a private persistent CivitasX conversation for the authenticated resident.",
+)
+def create_agent_thread(
+    goal: str,
+    title: str | None = None,
+    case_id: str | None = None,
+) -> dict[str, Any]:
+    user = get_mcp_user()
+    from .main import get_store
+
+    if case_id:
+        get_store().get_case(user.id, case_id)
+    else:
+        case_id = get_store().create_case(user.id, goal=goal, title=title).id
+    thread = _community().create_thread(user.id, title or goal[:160], case_id)
+    return _community().get_thread_detail(user.id, thread.id).model_dump(mode="json")
+
+
+@mcp.tool(
+    name="get_agent_thread",
+    title="Read an agent conversation",
+    description="Read one private agent conversation, including tool and review parts.",
+)
+def get_agent_thread(thread_id: str) -> dict[str, Any]:
+    user = get_mcp_user()
+    return _community().get_thread_detail(user.id, thread_id).model_dump(mode="json")
+
+
+@mcp.tool(
+    name="send_agent_message",
+    title="Talk to the CivitasX agent",
+    description=(
+        "Send a natural-language message to a persistent CivitasX conversation. "
+        "The same conversation is visible in the web app."
+    ),
+)
+async def send_agent_message(
+    thread_id: str,
+    content: str,
+    attachment_ids: list[str] | None = None,
+    client_message_id: str | None = None,
+) -> dict[str, Any]:
+    user = get_mcp_user()
+    from .main import execute_agent_turn
+
+    detail = await execute_agent_turn(
+        user.id,
+        thread_id,
+        SendAgentMessageRequest(
+            content=content,
+            attachment_ids=attachment_ids or [],
+            client_message_id=client_message_id,
+        ),
+    )
+    return detail.model_dump(mode="json")
+
+
+@mcp.tool(
+    name="get_submission_review",
+    title="Inspect filing review",
+    description="Read the latest exact complaint payload and its approval state.",
+)
+def get_submission_review(ticket_id: str) -> dict[str, Any]:
+    user = get_mcp_user()
+    from .main import _ticket_connector_context
+
+    detail, profile = _ticket_connector_context(user.id, ticket_id)
+    preparation = _community().latest_preparation(user.id, detail.ticket.id)
+    return {
+        "ticket": detail.model_dump(mode="json"),
+        "connector": profile.model_dump(mode="json"),
+        "preparation": (
+            preparation.model_copy(
+                update={"submission_enabled": profile.submission_enabled}
+            ).model_dump(mode="json")
+            if preparation
+            else None
+        ),
+        "approval_required": True,
+    }
+
+
+@mcp.tool(
+    name="prepare_submission",
+    title="Prepare an official filing",
+    description=(
+        "Build a hash-bound, private complaint payload. This fills and validates the "
+        "local preparation; it does not submit anything."
+    ),
+)
+def prepare_submission(
+    ticket_id: str,
+    fields: dict[str, str] | None = None,
+    attachment_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    user = get_mcp_user()
+    from .ipgrs_connector import validate_ipgrs_fields
+    from .main import _ticket_connector_context
+
+    detail, profile = _ticket_connector_context(user.id, ticket_id)
+    if profile.provider == "browser":
+        errors = validate_ipgrs_fields(
+            {
+                "description": detail.ticket.description,
+                "locality": detail.ticket.locality or "",
+                **(fields or {}),
+            }
+        )
+        if errors:
+            raise ValueError("; ".join(errors))
+    preparation = _community().prepare_ticket(
+        user.id,
+        detail.ticket.id,
+        authority_name=profile.name,
+        contact_route=profile.contact_route,
+        intake_url=str(profile.intake_url),
+        required_fields=[field.key for field in profile.requirements if field.required],
+        fields=fields or {},
+        attachment_ids=attachment_ids or [],
+    )
+    return {
+        "preparation": preparation.model_copy(
+            update={
+                "authority_name": profile.name,
+                "contact_route": profile.contact_route,
+                "intake_url": profile.intake_url,
+                "submission_enabled": profile.submission_enabled,
+            }
+        ).model_dump(mode="json"),
+        "approval_required": True,
+    }
+
+
+@mcp.tool(
+    name="approve_submission",
+    title="Approve an exact filing",
+    description="Approve the current hash-bound preparation for the authenticated resident.",
+)
+def approve_submission(ticket_id: str, content_hash: str) -> dict[str, Any]:
+    user = get_mcp_user()
+    from .main import _ticket_connector_context
+
+    detail, profile = _ticket_connector_context(user.id, ticket_id)
+    preparation = _community().latest_preparation(user.id, detail.ticket.id)
+    if preparation is None:
+        raise ValueError("Prepare the ticket before approving it")
+    approval = _community().approve_preparation(
+        user.id, preparation.id, content_hash
+    )
+    return approval.model_copy(
+        update={"submission_enabled": profile.submission_enabled}
+    ).model_dump(mode="json")
+
+
+@mcp.tool(
+    name="submit_approved_request",
+    title="Submit an approved filing",
+    description=(
+        "Start a filing for an exact approved preparation. With the reviewed Karnataka "
+        "iPGRS connector enabled this opens the official portal, fills approved fields, "
+        "and pauses for resident classification, OTP, and CAPTCHA. It never bypasses "
+        "those resident-controlled steps. A configured certified official API uses an "
+        "idempotency key and requires a verifiable authority reference. In local tests, "
+        "simulation=true uses only the synthetic connector."
+    ),
+)
+async def submit_approved_request(
+    ticket_id: str,
+    content_hash: str,
+    simulation: bool = False,
+) -> dict[str, Any]:
+    user = get_mcp_user()
+    from .main import _ticket_connector_context
+    from .models import TicketStatus
+
+    detail, profile = _ticket_connector_context(user.id, ticket_id)
+    preparation = _community().latest_preparation(user.id, detail.ticket.id)
+    if preparation is None or preparation.status != "approved":
+        raise ValueError("An approved preparation is required")
+    if preparation.content_hash != content_hash:
+        raise ValueError("The content hash does not match the approved preparation")
+    if preparation.approval_expires_at is not None:
+        from .community_store import utc_now
+
+        if preparation.approval_expires_at <= utc_now():
+            raise ValueError("The review approval has expired; prepare and approve again")
+    settings = get_settings()
+    from .main import _existing_submission_run
+
+    connector_enabled = bool(
+        simulation and settings.demo_submission_enabled
+    ) or bool(
+        not simulation
+        and settings.ipgrs_submission_enabled
+        and profile.authority_id == "gba"
+        and profile.submission_enabled
+    ) or bool(
+        not simulation and profile.provider == "official_api" and profile.submission_enabled
+    )
+    decision = PolicyEngine(settings.opa_url).decide(
+        "start_submission",
+        {
+            "approval": preparation.status == "approved",
+            "connector_enabled": connector_enabled,
+            # Calling this authenticated, write-scoped MCP tool is the
+            # resident/client confirmation for starting this exact run.
+            "resident_confirmation": True,
+        },
+    )
+    if not decision.allow:
+        raise ValueError(decision.reason)
+    existing = _existing_submission_run(
+        _community(), user.id, detail.ticket.id, preparation.content_hash
+    )
+    if existing is not None:
+        return existing.model_dump(mode="json")
+    if not simulation and profile.provider == "official_api" and profile.submission_enabled:
+        from .official_api_connector import execute_official_api_submission
+
+        run = _community().create_run(
+            user.id,
+            kind="submission",
+            message="Submitting through the certified official API",
+            ticket_id=detail.ticket.id,
+            connector_id=f"official-api:{profile.authority_id}",
+            status=AgentRunStatus.RUNNING,
+            receipt={"content_hash": preparation.content_hash, "stage": "queued"},
+        )
+        return (
+            await execute_official_api_submission(
+                owner_id=user.id,
+                run=run,
+                detail=detail,
+                preparation=preparation,
+                community=_community(),
+                settings=settings,
+            )
+        ).model_dump(mode="json")
+    run = _community().create_run(
+        user.id,
+        kind="submission",
+        message="Submission queued",
+        ticket_id=detail.ticket.id,
+        connector_id=(
+            "karnataka-ipgrs-grievances"
+            if (
+                settings.ipgrs_submission_enabled
+                and profile.authority_id == "gba"
+                and not simulation
+            )
+            else profile.authority_id
+        ),
+        status=AgentRunStatus.RUNNING,
+        receipt={"content_hash": preparation.content_hash, "stage": "queued"},
+    )
+    if (
+        not simulation
+        and settings.ipgrs_submission_enabled
+        and profile.authority_id == "gba"
+    ):
+        from .ipgrs_connector import ipgrs_browser_manager
+
+        return (
+            await ipgrs_browser_manager.start(
+                owner_id=user.id,
+                run_id=run.id,
+                ticket_id=detail.ticket.id,
+                preparation=preparation,
+                community=_community(),
+                settings=settings,
+            )
+        ).model_dump(mode="json")
+    if not simulation or not settings.demo_submission_enabled:
+        return _community().update_run(
+            user.id,
+            run.id,
+            status=AgentRunStatus.FAILED,
+            message=(
+                "No verified live submission connector is enabled. Complete the filing "
+                "through the supervised portal flow after credentials and approval are configured."
+            ),
+        ).model_dump(mode="json")
+    reference = f"DEMO-{detail.ticket.civitas_ticket_id}-{run.id[:8].upper()}"
+    acknowledgement = "Synthetic connector accepted the approved payload for testing."
+    receipt_decision = PolicyEngine(settings.opa_url).decide(
+        "record_receipt",
+        {
+            "submission_started": True,
+            "receipt_verified": bool(reference),
+            "content_hash_match": True,
+        },
+    )
+    if not receipt_decision.allow:
+        return _community().update_run(
+            user.id,
+            run.id,
+            status=AgentRunStatus.FAILED,
+            message=receipt_decision.reason,
+            receipt={
+                "content_hash": content_hash,
+                "outcome": "outcome_unknown",
+                "policy": receipt_decision.as_dict(),
+            },
+        ).model_dump(mode="json")
+    _community().record_outcome(
+        user.id,
+        detail.ticket.id,
+        status=TicketStatus.SUBMITTED,
+        external_reference_id=reference,
+        acknowledgement=acknowledgement,
+        tracking_url=f"https://civitas.local/demo/track/{reference}",
+        submitted_content_hash=content_hash,
+        note="Demo connector submission",
+    )
+    return _community().update_run(
+        user.id,
+        run.id,
+        status=AgentRunStatus.SUBMITTED,
+        message="Synthetic connector accepted the approved payload",
+        external_reference_id=reference,
+        receipt={
+            "reference_id": reference,
+            "acknowledgement": acknowledgement,
+            "tracking_url": f"https://civitas.local/demo/track/{reference}",
+            "simulation": True,
+            "content_hash": content_hash,
+        },
+    ).model_dump(mode="json")
+
+
+@mcp.tool(
+    name="prepare_public_post",
+    title="Prepare a public issue preview",
+    description="Create a redacted public-post preview and hash before publication approval.",
+)
+def prepare_public_post(
+    ticket_id: str,
+    title: str,
+    body: str,
+    locality: str | None = None,
+    visibility: str = "locality",
+    display_name: str | None = None,
+    attachment_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    user = get_mcp_user()
+    import hashlib
+
+    ticket = _community().get_ticket(user.id, ticket_id).ticket
+    if visibility not in {"nearby", "locality", "citywide"}:
+        raise ValueError("Invalid public visibility")
+    redacted_title = redact_public_text(title.strip())
+    redacted_body = redact_public_text(body.strip())
+    content_hash = hashlib.sha256(f"{title.strip()}\n{body.strip()}".encode()).hexdigest()
+    return {
+        "ticket_id": ticket.id,
+        "civitas_ticket_id": ticket.civitas_ticket_id,
+        "title": redacted_title,
+        "body": redacted_body,
+        "locality": locality.strip() if locality else ticket.locality,
+        "visibility": visibility,
+        "display_name": display_name or user.name,
+        "attachment_ids": sorted(set(attachment_ids or [])),
+        "redaction_content_hash": content_hash,
+        "approval_required": True,
+    }
+
+
+@mcp.tool(
+    name="publish_approved_post",
+    title="Publish an approved civic post",
+    description="Publish exactly the previously reviewed redacted issue preview.",
+)
+def publish_approved_post(
+    ticket_id: str,
+    title: str,
+    body: str,
+    redaction_content_hash: str,
+    locality: str | None = None,
+    visibility: str = "locality",
+    display_name: str | None = None,
+    attachment_ids: list[str] | None = None,
+    redaction_approved: bool = False,
+) -> dict[str, Any]:
+    user = get_mcp_user()
+    import hashlib
+
+    if not redaction_approved:
+        raise ValueError("Review and approve the redacted preview before publishing")
+    expected = hashlib.sha256(f"{title.strip()}\n{body.strip()}".encode()).hexdigest()
+    if expected != redaction_content_hash:
+        raise ValueError("The public preview changed after approval")
+    post = _community().publish_ticket(
+        user.id,
+        ticket_id,
+        title=title,
+        body=body,
+        locality=locality,
+        visibility=visibility,
+        author_name=display_name or user.name,
+        attachment_ids=attachment_ids or [],
+    )
+    return post.model_dump(mode="json")
+
+
+@mcp.tool(
+    name="get_run_status",
+    title="Get a durable action run",
+    description="Read the current status, checkpoint message, and receipt for an action run.",
+)
+def get_run_status(run_id: str) -> dict[str, Any]:
+    user = get_mcp_user()
+    return _community().get_run(user.id, run_id).model_dump(mode="json")
+
+
+@mcp.tool(
+    name="cancel_run",
+    title="Cancel an action run",
+    description="Cancel a queued or waiting CivitasX action run owned by the resident.",
+)
+async def cancel_run(run_id: str) -> dict[str, Any]:
+    user = get_mcp_user()
+    run = _community().get_run(user.id, run_id)
+    if run.status in {AgentRunStatus.SUBMITTED, AgentRunStatus.CANCELLED}:
+        return run.model_dump(mode="json")
+    if run.connector_id == "karnataka-ipgrs-grievances":
+        from .ipgrs_connector import ipgrs_browser_manager
+
+        await ipgrs_browser_manager.cancel(owner_id=user.id, run_id=run_id)
+    return _community().update_run(
+        user.id,
+        run_id,
+        status=AgentRunStatus.CANCELLED,
+        message="Run cancelled by the resident",
+    ).model_dump(mode="json")
+
+
+@mcp.tool(
+    name="resume_run",
+    title="Resume a waiting action run",
+    description=(
+        "Resume a supervised portal run. send_otp requests the official OTP, "
+        "verification_code verifies it in memory, and submit=true requests the final "
+        "portal submission after the resident has completed classification and CAPTCHA "
+        "and explicitly attested to that final review."
+    ),
+)
+async def resume_run(
+    run_id: str,
+    verification_code: str | None = None,
+    send_otp: bool = False,
+    submit: bool = False,
+    resident_attestation: bool = False,
+) -> dict[str, Any]:
+    user = get_mcp_user()
+    run = _community().get_run(user.id, run_id)
+    if run.connector_id == "karnataka-ipgrs-grievances":
+        from .ipgrs_connector import ipgrs_browser_manager
+
+        return (
+            await ipgrs_browser_manager.resume(
+                owner_id=user.id,
+                run_id=run_id,
+                verification_code=verification_code,
+                send_otp=send_otp,
+                submit=submit,
+                resident_attestation=resident_attestation,
+                community=_community(),
+            )
+        ).model_dump(mode="json")
+    if run.status == AgentRunStatus.WAITING_FOR_USER:
+        return _community().update_run(
+            user.id,
+            run_id,
+            status=AgentRunStatus.RUNNING,
+            message="Run resumed; awaiting the connector worker",
+        ).model_dump(mode="json")
+    return run.model_dump(mode="json")
 
 
 @mcp.tool(

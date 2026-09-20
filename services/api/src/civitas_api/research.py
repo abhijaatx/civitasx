@@ -27,6 +27,7 @@ from difflib import SequenceMatcher
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from .models import (
     AuthorityRecord,
@@ -38,6 +39,8 @@ from .models import (
     ResearchFact,
     SearchHit,
     SourceDocument,
+    SourceDocumentDetail,
+    SourcePage,
 )
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
@@ -186,6 +189,19 @@ def _tokens(text: str) -> list[str]:
     return [token for token in TOKEN_RE.findall(normalized) if token not in STOP_WORDS]
 
 
+def _is_retained_live_source(document: dict[str, Any]) -> bool:
+    """Keep retired live-cache records from resurfacing as current evidence."""
+
+    source_id = str(document.get("source_id", ""))
+    if not source_id.startswith("live-"):
+        return True
+    parsed = urlparse(str(document.get("url", "")))
+    # The old BenSCL connector mixed dataset pages and an unrelated PDF path.
+    # Existing cache rows remain on disk for auditability, but are not eligible
+    # for new answers after the connector was retired.
+    return (parsed.hostname or "").casefold() != "opendata.benscl.com"
+
+
 def _expanded_tokens(text: str) -> list[str]:
     base = _tokens(text)
     expanded = list(base)
@@ -256,6 +272,7 @@ class ResearchIndex:
         self.hash_mismatches: set[str] = set()
         self._live_lock = threading.RLock()
         self._s3_client: Any | None = None
+        self._haystack_pipeline: Any | None = None
         self.reload()
 
     def reload(self) -> None:
@@ -264,6 +281,7 @@ class ResearchIndex:
             self.pages.clear()
             self.authority_records.clear()
             self.hash_mismatches.clear()
+            self._haystack_pipeline = None
             if not self.manifest_path.exists():
                 return
             raw_manifest = json.loads(self.manifest_path.read_text(encoding="utf-8"))
@@ -331,7 +349,7 @@ class ResearchIndex:
                             "Body"
                         ].read()
                         decoded = json.loads(body.decode("utf-8"))
-                        if isinstance(decoded, dict):
+                        if isinstance(decoded, dict) and _is_retained_live_source(decoded):
                             documents.append(decoded)
                 return documents
             except Exception:  # pragma: no cover - provider-specific S3 errors
@@ -342,7 +360,11 @@ class ResearchIndex:
             try:
                 live_documents = json.loads(self.live_cache_path.read_text(encoding="utf-8"))
                 if isinstance(live_documents, list):
-                    return [item for item in live_documents if isinstance(item, dict)]
+                    return [
+                        item
+                        for item in live_documents
+                        if isinstance(item, dict) and _is_retained_live_source(item)
+                    ]
             except (OSError, json.JSONDecodeError):
                 pass
         return []
@@ -398,6 +420,107 @@ class ResearchIndex:
 
     def get_document(self, source_id: str) -> SourceDocument | None:
         return self.documents.get(source_id)
+
+    def list_documents(
+        self,
+        query: str | None = None,
+        *,
+        authority_id: str | None = None,
+        sort_by: str = "published_at",
+        limit: int = 12,
+    ) -> list[SourceDocument]:
+        """List indexed documents without confusing retrieval time with publication time.
+
+        ``retrieved_at`` records when CivitasX checked a source.  It is a useful
+        freshness fallback, but it is not evidence that the document itself was
+        updated then.  Callers can expose that distinction through the returned
+        metadata instead of presenting a misleading "latest" document.
+        """
+
+        safe_sort = sort_by if sort_by in {"published_at", "retrieved_at"} else "published_at"
+        safe_limit = max(1, min(int(limit), 20))
+        query_tokens = {
+            token
+            for token in _tokens(query or "")
+            if token
+            not in {
+                "recent",
+                "latest",
+                "newest",
+                "updated",
+                "update",
+                "document",
+                "documents",
+            }
+        }
+        candidates: list[SourceDocument] = []
+        for document in self.documents.values():
+            if authority_id and document.authority_id != authority_id:
+                continue
+            if query_tokens:
+                haystack = set(
+                    _tokens(
+                        " ".join(
+                            (
+                                document.source_id,
+                                document.title,
+                                document.authority,
+                                document.authority_id,
+                            )
+                        )
+                    )
+                )
+                if not query_tokens.issubset(haystack):
+                    continue
+            candidates.append(document)
+
+        def sort_value(document: SourceDocument) -> tuple[bool, datetime]:
+            value = getattr(document, safe_sort)
+            if value is None and safe_sort == "published_at":
+                value = document.retrieved_at
+            return (
+                getattr(document, safe_sort) is not None,
+                value or datetime.min.replace(tzinfo=UTC),
+            )
+
+        candidates.sort(key=sort_value, reverse=True)
+        return candidates[:safe_limit]
+
+    def get_document_detail(
+        self,
+        source_id: str,
+        *,
+        page: int | None = None,
+        page_limit: int = 20,
+    ) -> SourceDocumentDetail:
+        """Return one indexed document and bounded page-addressable content."""
+
+        document = self.documents.get(source_id)
+        if document is None:
+            raise KeyError(f"Source document not found: {source_id}")
+        safe_limit = max(1, min(int(page_limit), 20))
+        source_pages = [item for item in self.pages if item.source_id == source_id]
+        if page is not None:
+            source_pages = [item for item in source_pages if item.page == int(page)]
+        source_pages = source_pages[:safe_limit]
+        return SourceDocumentDetail(
+            document=document,
+            pages=[
+                SourcePage(
+                    source_id=item.source_id,
+                    page=item.page,
+                    passage=(
+                        item.translation
+                        if item.translation and item.original_text
+                        else item.text
+                    ),
+                    original_passage=item.original_text if item.translation else None,
+                    translated_passage=item.translation if item.translation else None,
+                    translation_language="kn" if item.translation else None,
+                )
+                for item in source_pages
+            ],
+        )
 
     def compare_documents(self, source_id: str, baseline_source_id: str) -> DocumentComparison:
         """Compare two indexed versions while keeping every change page-bound.
@@ -626,6 +749,7 @@ class ResearchIndex:
                 missing=["The question did not contain a searchable topic."],
             )
         query_vector = _hash_vector(question)
+        haystack_pages = self._haystack_candidates(question, max_sources=max_sources)
         candidates: list[tuple[float, float, float, CorpusPage, SourceDocument, list[str]]] = []
         considered_documents: set[str] = set()
         stale_ids: set[str] = set()
@@ -673,6 +797,8 @@ class ResearchIndex:
             keyword += 0.08 if document.authority_id in route_authorities else 0
             semantic = _cosine(query_vector, _hash_vector(page.searchable_text))
             combined = max(0.0, keyword * 0.68 + semantic * 0.32)
+            if (page.source_id, page.page) in haystack_pages:
+                combined += 0.04
             # A result must have a lexical match or a meaningful semantic score;
             # this prevents a generic page from being shown for an unsupported ask.
             if not matched and semantic < 0.30:
@@ -752,6 +878,20 @@ class ResearchIndex:
             else ["No indexed passage met the evidence threshold for this question."],
         )
         return hits, coverage
+
+    def _haystack_candidates(self, question: str, *, max_sources: int) -> set[tuple[str, int]]:
+        """Use Haystack BM25 as an optional recall signal when installed."""
+
+        if self._haystack_pipeline is None:
+            try:
+                from .retrieval_pipeline import HaystackEvidencePipeline
+
+                self._haystack_pipeline = HaystackEvidencePipeline(self.pages)
+            except Exception:  # pragma: no cover - optional dependency failures
+                self._haystack_pipeline = False
+        if self._haystack_pipeline is False:
+            return set()
+        return self._haystack_pipeline.candidates(question, limit=max_sources * 2)
 
     def answer(
         self,

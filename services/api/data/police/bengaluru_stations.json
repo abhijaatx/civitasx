@@ -1,0 +1,82 @@
+{
+  "dataset_id": "bengaluru-police-station-routing",
+  "title": "Bengaluru police-station routing records",
+  "authority": "Bengaluru City Police",
+  "retrieved_at": "2026-09-20",
+  "policy": {
+    "uncertain_location": "If the exact boundary is uncertain, report the incident at the nearest police station and ask the station to register and route the information as required.",
+    "emergency": "If the theft is happening now or anyone is in immediate danger, call 112.",
+    "source_url": "https://www.indiacode.nic.in/bitstream/123456789/20340/1/bnss%2C_2023.pdf",
+    "source_title": "Bharatiya Nagarik Suraksha Sanhita, 2023, Section 173"
+  },
+  "stations": [
+    {
+      "station_id": "bengaluru-hsr-layout",
+      "name": "HSR Layout Police Station",
+      "address": "27th Main Road, 1st Sector, HSR Layout, Bengaluru, Karnataka 560102",
+      "locality": "HSR Layout",
+      "division": "South East",
+      "phone": "080-22943467",
+      "mobile": null,
+      "aliases": [
+        "hsr layout",
+        "hsr",
+        "hsr sector",
+        "hsr layout police station",
+        "27th main hsr",
+        "27th main road hsr"
+      ],
+      "source_urls": [
+        "https://bcp.karnataka.gov.in/",
+        "https://data.opencity.in/dataset/ec3f492f-6aa5-4f7c-958d-ae9ba12cec4a/resource/a153cff8-2d99-401c-ac79-91ca6061b981/download/police-stations-bengaluru-contacts.pdf"
+      ],
+      "source_title": "Bengaluru City Police station directory"
+    },
+    {
+      "station_id": "bengaluru-bellanduru",
+      "name": "Bellanduru Police Station",
+      "address": "Bellanduru, Bengaluru, Karnataka 560103",
+      "locality": "Bellanduru",
+      "division": "Whitefield",
+      "phone": "080-25747771",
+      "mobile": "9480801543",
+      "aliases": [
+        "bellandur",
+        "bellanduru",
+        "bellandur police station",
+        "ambalipura",
+        "varthur hobli",
+        "prestige ferns galaxy",
+        "microsoft office",
+        "microsoft campus",
+        "microsoft bengaluru",
+        "bellandur gate road",
+        "outer ring road near microsoft",
+        "orr near microsoft"
+      ],
+      "source_urls": [
+        "https://bcp.karnataka.gov.in/",
+        "https://www.microsoft.com/en-in/about/contact-us"
+      ],
+      "source_title": "Bengaluru City Police station directory and Microsoft India office listing"
+    },
+    {
+      "station_id": "bengaluru-madiwala",
+      "name": "Madiwala Police Station",
+      "address": "Madiwala, Bengaluru, Karnataka 560068",
+      "locality": "Madiwala",
+      "division": "South East",
+      "phone": "080-22943080",
+      "mobile": null,
+      "aliases": [
+        "madiwala",
+        "madiwala police station",
+        "madiwala market"
+      ],
+      "source_urls": [
+        "https://bcp.karnataka.gov.in/"
+      ],
+      "source_title": "Bengaluru City Police station directory"
+    }
+  ]
+}

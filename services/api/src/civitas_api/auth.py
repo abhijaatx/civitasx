@@ -154,7 +154,13 @@ class AuthService:
                 signing_key.key,
                 algorithms=["RS256"],
                 issuer=issuer,
-                options={"require": ["exp", "iat", "sub", "token_use"]},
+                options={
+                    "require": ["exp", "iat", "sub", "token_use"],
+                    # Cognito ID tokens include `aud`. Validate it explicitly
+                    # below after checking token_use; PyJWT rejects the token
+                    # when audience=None and verify_aud remains enabled.
+                    "verify_aud": False,
+                },
                 audience=None,
             )
             if claims.get("token_use") not in {"access", "id"}:

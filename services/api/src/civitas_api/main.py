@@ -37,6 +37,8 @@ from .live_connectors import LiveConnectorRegistry
 from .mcp_server import mcp, reset_mcp_user, set_mcp_user
 from .models import (
     AgentMessageRole,
+    AgentRun,
+    AgentRunStatus,
     AgentThreadDetail,
     AgentThreadStatus,
     AppCapabilities,
@@ -85,6 +87,7 @@ from .models import (
     PasswordRecoveryRequest,
     PreparationApproval,
     PrepareTicketRequest,
+    ProfileValue,
     PublicPostAttachment,
     PublicPostAttachmentListResponse,
     RecordOutcomeRequest,
@@ -93,6 +96,8 @@ from .models import (
     ResearchAnswer,
     ResearchHistoryResponse,
     ResearchQueryRequest,
+    ResidentProfile,
+    ResumeRunRequest,
     SaveRequest,
     SaveResponse,
     SendAgentMessageRequest,
@@ -104,11 +109,15 @@ from .models import (
     UpdateAgentThreadRequest,
     UpdateCaseRequest,
     UpdateTicketStatusRequest,
+    UpsertProfileValueRequest,
     UsageSummary,
     User,
     VoteRequest,
     VoteResponse,
 )
+from .observability import configure_telemetry
+from .official_api_connector import execute_official_api_submission
+from .policy import PolicyEngine
 from .research import ResearchIndex
 from .store import DynamoStore, SQLiteStore
 
@@ -148,15 +157,22 @@ def get_community_store() -> LocalCommunityStore | DynamoCommunityStore:
 @lru_cache(maxsize=1)
 def get_agent() -> ReActAgent:
     settings = get_settings()
+    configure_telemetry(settings.telemetry_enabled)
     return ReActAgent(
         get_research_index(),
         get_community_store(),
         build_provider(settings),
         max_iterations=settings.agent_max_iterations,
+        tool_timeout_seconds=settings.agent_tool_timeout_seconds,
         context_max_chars=settings.agent_context_max_chars,
         context_keep_messages=settings.agent_context_keep_messages,
         grounding_verification=settings.agent_grounding_verification,
         live_registry=get_live_registry(),
+        police_registry_path=str(settings.police_registry),
+        capability_registry_path=str(settings.capability_registry),
+        opa_url=settings.opa_url,
+        temporal_target=settings.temporal_target,
+        spatial_database_url=settings.spatial_database_url,
     )
 
 
@@ -214,7 +230,14 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
         try:
             user = get_auth_service().user_from_token(token)
         except HTTPException as exc:
-            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+            headers = dict(exc.headers or {})
+            if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+                headers.setdefault("WWW-Authenticate", "Bearer")
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=headers,
+            )
         context_token = set_mcp_user(user)
         try:
             return await call_next(request)
@@ -232,6 +255,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         get_community_store()
         get_agent()
         yield
+    # Close any supervised iPGRS browser that is still open before tearing down
+    # the persistence adapters.  OTPs and CAPTCHA state remain in the browser
+    # only; no verification code is stored by the API.
+    from .ipgrs_connector import close_ipgrs_sessions
+
+    await close_ipgrs_sessions()
     store = get_store()
     store.close()
     get_store.cache_clear()
@@ -259,7 +288,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 app.mount("/mcp", mcp_http_app)
@@ -320,7 +349,11 @@ def public_config() -> AppConfig:
         capabilities=AppCapabilities(
             phase=8,
             research=True,
-            submission=False,
+            submission=bool(
+                settings.demo_submission_enabled
+                or settings.ipgrs_submission_enabled
+                or (settings.official_api_url and settings.official_api_token)
+            ),
             feed=True,
             agent=True,
             tickets=True,
@@ -913,6 +946,22 @@ def _begin_agent_turn(owner_id: str, thread_id: str, request: SendAgentMessageRe
         {"type": "attachment", "attachment_id": attachment_id, "text": "Attached evidence"}
         for attachment_id in request.attachment_ids
     ]
+    if request.location is not None:
+        parts.append(
+            {
+                "type": "location",
+                "text": request.location.label or request.location.address or "Pinned location",
+                "data": request.location.model_dump(mode="json"),
+            }
+        )
+    if request.response_language != "auto":
+        parts.append(
+            {
+                "type": "status",
+                "text": "Response language preference",
+                "data": {"response_language": request.response_language},
+            }
+        )
     if request.client_message_id:
         # Keep the idempotency marker inside the existing persisted part union;
         # metadata is not a user-visible message type.
@@ -952,8 +1001,11 @@ def _reserve_agent_usage(owner_id: str, thread_id: str) -> str | None:
 
 
 def _persist_agent_reply(owner_id: str, thread_id: str, reply: AgentReply) -> None:
+    content = reply.content.strip() or (
+        "I could not complete that turn. Your message is saved; please retry."
+    )
     get_community_store().add_message(
-        owner_id, thread_id, AgentMessageRole.ASSISTANT, reply.content, reply.parts
+        owner_id, thread_id, AgentMessageRole.ASSISTANT, content, reply.parts
     )
 
 
@@ -975,36 +1027,49 @@ def _agent_reply_usage(reply: AgentReply) -> tuple[int, int]:
     return 0, 0
 
 
-@app.post("/api/agent/threads/{thread_id}/messages", response_model=AgentThreadDetail)
-async def send_agent_message(
-    thread_id: str,
-    request: SendAgentMessageRequest,
-    user: User = Depends(current_user),
+async def execute_agent_turn(
+    owner_id: str, thread_id: str, request: SendAgentMessageRequest
 ) -> AgentThreadDetail:
-    reservation = _reserve_agent_usage(user.id, thread_id)
+    """Run one non-streaming turn for REST and MCP callers.
+
+    Keeping this path shared prevents external MCP clients from getting a
+    different ownership, idempotency, attachment, or usage policy than the
+    CivitasX web application.
+    """
+
+    reservation = _reserve_agent_usage(owner_id, thread_id)
     try:
-        created = _begin_agent_turn(user.id, thread_id, request)
+        created = _begin_agent_turn(owner_id, thread_id, request)
         if not created:
             if reservation:
-                get_store().release_usage(owner_id=user.id, reservation_id=reservation)
-            return get_community_store().get_thread_detail(user.id, thread_id)
-        reply = await get_agent().run(owner_id=user.id, thread_id=thread_id)
-        _persist_agent_reply(user.id, thread_id, reply)
+                get_store().release_usage(owner_id=owner_id, reservation_id=reservation)
+            return get_community_store().get_thread_detail(owner_id, thread_id)
+        reply = await get_agent().run(owner_id=owner_id, thread_id=thread_id)
+        _persist_agent_reply(owner_id, thread_id, reply)
         if reservation:
             input_tokens, output_tokens = _agent_reply_usage(reply)
             get_store().settle_usage(
-                owner_id=user.id,
+                owner_id=owner_id,
                 reservation_id=reservation,
                 actual_cost_usd=0.0,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 item_kind="model",
             )
-        return get_community_store().get_thread_detail(user.id, thread_id)
+        return get_community_store().get_thread_detail(owner_id, thread_id)
     except Exception:
         if reservation:
-            get_store().release_usage(owner_id=user.id, reservation_id=reservation)
+            get_store().release_usage(owner_id=owner_id, reservation_id=reservation)
         raise
+
+
+@app.post("/api/agent/threads/{thread_id}/messages", response_model=AgentThreadDetail)
+async def send_agent_message(
+    thread_id: str,
+    request: SendAgentMessageRequest,
+    user: User = Depends(current_user),
+) -> AgentThreadDetail:
+    return await execute_agent_turn(user.id, thread_id, request)
 
 
 @app.post("/api/agent/threads/{thread_id}/messages/stream")
@@ -1056,8 +1121,11 @@ async def stream_agent_message(
                     event_data = json.dumps(event.get("data", {}), ensure_ascii=False)
                     yield f"event: {kind}\ndata: {event_data}\n\n"
                 elif kind == "final":
+                    content = str(event.get("content", "")).strip()
                     final = AgentReply(
-                        content=str(event.get("content", "")), parts=list(event.get("parts", []))
+                        content=content
+                        or "I could not complete that turn. Your message is saved; please retry.",
+                        parts=list(event.get("parts", [])),
                     )
             if final is None:
                 final = AgentReply("The agent did not complete this turn. Please retry.", [])
@@ -1212,6 +1280,99 @@ def delete_agent_attachment(attachment_id: str, user: User = Depends(current_use
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@app.get("/api/profile", response_model=ResidentProfile)
+def get_resident_profile(user: User = Depends(current_user)) -> ResidentProfile:
+    """Return only the authenticated resident's remembered, confirmed values."""
+
+    return get_community_store().get_profile(user.id)
+
+
+@app.put("/api/profile/{key}", response_model=ProfileValue)
+def save_resident_profile_value(
+    key: str,
+    request: UpsertProfileValueRequest,
+    user: User = Depends(current_user),
+) -> ProfileValue:
+    if key.strip().lower() != request.key.strip().lower():
+        raise HTTPException(status_code=409, detail="Profile key in the path and body must match")
+    return get_community_store().upsert_profile_value(
+        user.id,
+        key=request.key,
+        value=request.value,
+        source=request.source,
+        confirmed=request.confirmed,
+        remember=request.remember,
+    )
+
+
+@app.delete("/api/profile/{key}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_resident_profile_value(key: str, user: User = Depends(current_user)) -> Response:
+    get_community_store().delete_profile_value(user.id, key)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/api/runs", response_model=dict)
+def list_agent_runs(user: User = Depends(current_user)) -> dict[str, Any]:
+    return {
+        "items": [
+            run.model_dump(mode="json") for run in get_community_store().list_runs(user.id)
+        ]
+    }
+
+
+@app.get("/api/runs/{run_id}", response_model=AgentRun)
+def get_agent_run(run_id: str, user: User = Depends(current_user)) -> AgentRun:
+    return get_community_store().get_run(user.id, run_id)
+
+
+@app.post("/api/runs/{run_id}/resume", response_model=AgentRun)
+async def resume_agent_run(
+    run_id: str,
+    request: ResumeRunRequest,
+    user: User = Depends(current_user),
+) -> AgentRun:
+    community = get_community_store()
+    run = community.get_run(user.id, run_id)
+    if run.connector_id == "karnataka-ipgrs-grievances":
+        from .ipgrs_connector import ipgrs_browser_manager
+
+        return await ipgrs_browser_manager.resume(
+            owner_id=user.id,
+            run_id=run_id,
+            verification_code=request.verification_code,
+            send_otp=request.send_otp,
+            submit=request.submit,
+            resident_attestation=request.resident_attestation,
+            community=community,
+        )
+    if run.status == "waiting_for_user":
+        return community.update_run(
+            user.id,
+            run_id,
+            status=AgentRunStatus.RUNNING,
+            message="Run resumed; awaiting the connector worker",
+        )
+    return run
+
+
+@app.post("/api/runs/{run_id}/cancel", response_model=AgentRun)
+async def cancel_agent_run(run_id: str, user: User = Depends(current_user)) -> AgentRun:
+    community = get_community_store()
+    run = community.get_run(user.id, run_id)
+    if run.status in {AgentRunStatus.SUBMITTED, AgentRunStatus.CANCELLED}:
+        return run
+    if run.connector_id == "karnataka-ipgrs-grievances":
+        from .ipgrs_connector import ipgrs_browser_manager
+
+        await ipgrs_browser_manager.cancel(owner_id=user.id, run_id=run_id)
+    return community.update_run(
+        user.id,
+        run_id,
+        status=AgentRunStatus.CANCELLED,
+        message="Run cancelled by the resident",
+    )
+
+
 @app.get("/api/tickets", response_model=dict)
 def tickets(user: User = Depends(current_user)) -> dict[str, Any]:
     return {
@@ -1259,10 +1420,67 @@ def _ticket_connector_context(
         raise HTTPException(
             status_code=422, detail="Choose an authority before preparing this ticket"
         )
-    profile = get_connector(get_research_index(), detail.ticket.authority_id)
+    settings = get_settings()
+    profile = get_connector(
+        get_research_index(),
+        detail.ticket.authority_id,
+        ipgrs_enabled=settings.ipgrs_submission_enabled,
+        ipgrs_url=settings.ipgrs_browser_url,
+        official_api_authority_id=settings.official_api_authority_id,
+        official_api_configured=bool(settings.official_api_url and settings.official_api_token),
+        official_api_url=settings.official_api_url,
+    )
     if profile is None:
         raise NotFoundError("No verified connector is available for this authority")
     return detail, profile
+
+
+def _existing_submission_run(
+    community: LocalCommunityStore | DynamoCommunityStore,
+    owner_id: str,
+    ticket_id: str,
+    content_hash: str,
+) -> AgentRun | None:
+    """Return an already-started run for the exact approved payload.
+
+    A browser retry can happen after the client loses its response. Reusing the
+    run prevents a second government filing for the same content hash. Runs
+    whose receipt is explicitly marked outcome-unknown are also returned so a
+    caller must investigate the portal before attempting anything again.
+    """
+
+    reusable = {
+        AgentRunStatus.QUEUED,
+        AgentRunStatus.RUNNING,
+        AgentRunStatus.WAITING_FOR_USER,
+        AgentRunStatus.READY_FOR_REVIEW,
+        AgentRunStatus.SUBMITTED,
+    }
+    for run in community.list_runs(owner_id, limit=100):
+        if run.kind != "submission" or run.ticket_id != ticket_id:
+            continue
+        if run.receipt.get("content_hash") != content_hash:
+            continue
+        if run.status in reusable or run.receipt.get("outcome") == "outcome_unknown":
+            return run
+    return None
+
+
+def _validate_browser_preparation(
+    profile: ConnectorProfile, detail: TicketDetail, fields: dict[str, str]
+) -> None:
+    if profile.provider != "browser":
+        return
+    from .ipgrs_connector import validate_ipgrs_fields
+
+    candidate = {
+        "description": detail.ticket.description,
+        "locality": detail.ticket.locality or "",
+        **fields,
+    }
+    errors = validate_ipgrs_fields(candidate)
+    if errors:
+        raise HTTPException(status_code=422, detail="; ".join(errors))
 
 
 @app.post("/api/tickets/{ticket_id}/prepare", response_model=TicketPreparation)
@@ -1272,6 +1490,7 @@ def prepare_ticket(
     user: User = Depends(current_user),
 ) -> TicketPreparation:
     detail, profile = _ticket_connector_context(user.id, ticket_id)
+    _validate_browser_preparation(profile, detail, request.fields)
     preparation = get_community_store().prepare_ticket(
         user.id,
         detail.ticket.id,
@@ -1287,6 +1506,7 @@ def prepare_ticket(
             "authority_name": profile.name,
             "contact_route": profile.contact_route,
             "intake_url": profile.intake_url,
+            "submission_enabled": profile.submission_enabled,
         }
     )
 
@@ -1304,6 +1524,7 @@ def latest_ticket_preparation(
             "authority_name": profile.name,
             "contact_route": profile.contact_route,
             "intake_url": profile.intake_url,
+            "submission_enabled": profile.submission_enabled,
         }
     )
 
@@ -1314,11 +1535,14 @@ def approve_ticket_preparation(
     request: ApprovePreparationRequest,
     user: User = Depends(current_user),
 ) -> PreparationApproval:
-    detail, _ = _ticket_connector_context(user.id, ticket_id)
+    detail, profile = _ticket_connector_context(user.id, ticket_id)
     preparation = get_community_store().latest_preparation(user.id, detail.ticket.id)
     if preparation is None:
         raise NotFoundError("Prepare the ticket before approving it")
-    return get_community_store().approve_preparation(user.id, preparation.id, request.content_hash)
+    approval = get_community_store().approve_preparation(
+        user.id, preparation.id, request.content_hash
+    )
+    return approval.model_copy(update={"submission_enabled": profile.submission_enabled})
 
 
 @app.get("/api/tickets/{ticket_id}/checkpoints", response_model=CheckpointListResponse)
@@ -1353,23 +1577,97 @@ def ticket_outcome(
     )
 
 
-@app.post("/api/tickets/{ticket_id}/submit")
-def submit_ticket(ticket_id: str, user: User = Depends(current_user)) -> JSONResponse:
-    """Explicitly keep government submission disabled in the local build."""
+@app.post("/api/tickets/{ticket_id}/submit", response_model=None)
+async def submit_ticket(
+    ticket_id: str, user: User = Depends(current_user)
+) -> Any:
+    """Start the certified official connector after exact preparation approval."""
 
-    detail = get_community_store().get_ticket(user.id, ticket_id)
-    preparation = get_community_store().latest_preparation(user.id, detail.ticket.id)
+    detail, profile = _ticket_connector_context(user.id, ticket_id)
+    community = get_community_store()
+    preparation = community.latest_preparation(user.id, detail.ticket.id)
     if preparation is None or preparation.status != "approved":
         raise HTTPException(status_code=409, detail="A valid review approval is required")
     if preparation.approval_expires_at is None or preparation.approval_expires_at <= utc_now():
         raise HTTPException(
             status_code=409, detail="The review approval has expired; prepare and approve again"
         )
+    settings = get_settings()
+    if profile.provider == "official_api" and profile.submission_enabled:
+        existing = _existing_submission_run(
+            community, user.id, detail.ticket.id, preparation.content_hash
+        )
+        if existing is not None:
+            return existing
+        decision = PolicyEngine(settings.opa_url).decide(
+            "start_submission",
+            {
+                "approval": preparation.status == "approved",
+                "connector_enabled": True,
+                "resident_confirmation": True,
+            },
+        )
+        if not decision.allow:
+            raise HTTPException(status_code=403, detail=decision.reason)
+        run = community.create_run(
+            user.id,
+            kind="submission",
+            message="Submitting through the certified official API",
+            ticket_id=detail.ticket.id,
+            connector_id=f"official-api:{profile.authority_id}",
+            status=AgentRunStatus.RUNNING,
+            receipt={"content_hash": preparation.content_hash, "stage": "queued"},
+        )
+        return await execute_official_api_submission(
+            owner_id=user.id,
+            run=run,
+            detail=detail,
+            preparation=preparation,
+            community=community,
+            settings=settings,
+        )
+    if settings.ipgrs_submission_enabled and profile.authority_id == "gba":
+        existing = _existing_submission_run(
+            community, user.id, detail.ticket.id, preparation.content_hash
+        )
+        if existing is not None:
+            return existing
+        decision = PolicyEngine(settings.opa_url).decide(
+            "start_submission",
+            {
+                "approval": preparation.status == "approved",
+                "connector_enabled": profile.submission_enabled,
+                # This endpoint is only reachable from the resident's
+                # authenticated, explicit "open official form" action.
+                "resident_confirmation": True,
+            },
+        )
+        if not decision.allow:
+            raise HTTPException(status_code=403, detail=decision.reason)
+        run = community.create_run(
+            user.id,
+            kind="submission",
+            message="Opening the supervised Karnataka iPGRS connector",
+            ticket_id=detail.ticket.id,
+            connector_id="karnataka-ipgrs-grievances",
+            status=AgentRunStatus.RUNNING,
+            receipt={"content_hash": preparation.content_hash, "stage": "queued"},
+        )
+        from .ipgrs_connector import ipgrs_browser_manager
+
+        return await ipgrs_browser_manager.start(
+            owner_id=user.id,
+            run_id=run.id,
+            ticket_id=detail.ticket.id,
+            preparation=preparation,
+            community=community,
+            settings=settings,
+        )
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail=(
-            "Government submission is disabled until an official connector and "
-            "credentials are configured"
+            "No live connector is enabled for this authority. Enable the reviewed "
+            "Karnataka iPGRS browser connector to file Greater Bengaluru complaints."
         ),
     )
 
@@ -1575,12 +1873,32 @@ def authorities(
 def connectors(
     query: str | None = Query(default=None, max_length=200), _: User = Depends(current_user)
 ) -> ConnectorListResponse:
-    return ConnectorListResponse(items=list_connectors(get_research_index(), query))
+    settings = get_settings()
+    return ConnectorListResponse(
+        items=list_connectors(
+            get_research_index(),
+            query,
+            ipgrs_enabled=settings.ipgrs_submission_enabled,
+            ipgrs_url=settings.ipgrs_browser_url,
+            official_api_authority_id=settings.official_api_authority_id,
+            official_api_configured=bool(settings.official_api_url and settings.official_api_token),
+            official_api_url=settings.official_api_url,
+        )
+    )
 
 
 @app.get("/api/connectors/{authority_id}", response_model=ConnectorProfile)
 def connector(authority_id: str, _: User = Depends(current_user)) -> ConnectorProfile:
-    profile = get_connector(get_research_index(), authority_id)
+    settings = get_settings()
+    profile = get_connector(
+        get_research_index(),
+        authority_id,
+        ipgrs_enabled=settings.ipgrs_submission_enabled,
+        ipgrs_url=settings.ipgrs_browser_url,
+        official_api_authority_id=settings.official_api_authority_id,
+        official_api_configured=bool(settings.official_api_url and settings.official_api_token),
+        official_api_url=settings.official_api_url,
+    )
     if profile is None:
         raise NotFoundError("Connector not found")
     return profile

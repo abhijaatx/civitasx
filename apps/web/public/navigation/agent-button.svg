@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="176" height="132" viewBox="0 0 176 132" role="img" aria-labelledby="title desc">
+  <title id="title">Agent navigation button</title>
+  <desc id="desc">Agent navigation button with a muted rounded-square icon and label.</desc>
+  <rect x="67" y="23" width="42" height="36" rx="10" fill="#f3f0e8" fill-opacity=".045" stroke="#f3f0e8" stroke-opacity=".62" stroke-width="2"/>
+  <path d="M77 41h15M77 48h10M99 31v4M99 48v4" stroke="#f3f0e8" stroke-opacity=".78" stroke-width="2" stroke-linecap="round"/>
+  <path d="m96 37 2 4 4 2-4 2-2 4-2-4-4-2 4-2 2-4Z" fill="#f3f0e8" fill-opacity=".78"/>
+  <text x="88" y="94" text-anchor="middle" fill="#f3f0e8" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="17" font-weight="600" letter-spacing="3.2">AGENT</text>
+</svg>

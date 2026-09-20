@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,9 +11,11 @@ from civitas_api.agent import (
     FallbackProvider,
     ProviderFailure,
     ProviderResult,
+    ReActAgent,
     RetryingProvider,
     build_provider,
 )
+from civitas_api.civic_tools import READ_ONLY_TOOL_NAMES
 from civitas_api.config import Settings
 
 
@@ -96,6 +99,54 @@ async def test_codex_cli_provider_forwards_jsonl_messages_incrementally(monkeypa
 def test_codex_is_a_first_class_provider_option():
     settings = Settings(agent_provider="codex")
     assert isinstance(build_provider(settings), CodexCliProvider)
+
+
+def test_tool_policy_and_structured_memory_preserve_verified_context():
+    assert "search_official_records" in READ_ONLY_TOOL_NAMES
+    assert "refresh_live_official_source" not in READ_ONLY_TOOL_NAMES
+
+    detail = SimpleNamespace(
+        messages=[
+            SimpleNamespace(
+                parts=[
+                    SimpleNamespace(
+                        type="tool",
+                        data={
+                            "tool_name": "resolve_ward_and_authority",
+                            "result": {
+                                "resolution": {
+                                    "canonical_locality": "Indiranagar",
+                                    "authority_id": "bmrcl",
+                                    "needs_confirmation": True,
+                                }
+                            },
+                        },
+                    ),
+                    SimpleNamespace(
+                        type="tool",
+                        data={
+                            "tool_name": "search_official_records",
+                            "result": {
+                                "answer": {
+                                    "sources": [
+                                        {
+                                            "source_id": "source-1",
+                                            "title": "Station access record",
+                                            "page": 4,
+                                        }
+                                    ]
+                                }
+                            },
+                        },
+                    ),
+                ]
+            )
+        ]
+    )
+
+    memory = ReActAgent._structured_thread_memory(detail)
+    assert memory["latest_resolution"]["canonical_locality"] == "Indiranagar"
+    assert memory["latest_sources"][0]["source_id"] == "source-1"
 
 
 def test_fallback_provider_resets_visible_primary_each_turn():

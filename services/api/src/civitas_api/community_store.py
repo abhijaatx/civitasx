@@ -26,6 +26,8 @@ from .errors import ConflictError, NotFoundError, RateLimitError
 from .models import (
     AgentMessage,
     AgentMessageRole,
+    AgentRun,
+    AgentRunStatus,
     AgentThread,
     AgentThreadDetail,
     AgentThreadStatus,
@@ -36,7 +38,9 @@ from .models import (
     ComplaintTicket,
     FollowSubject,
     PreparationApproval,
+    ProfileValue,
     Report,
+    ResidentProfile,
     ShareSnapshot,
     SourceEvidence,
     TicketDetail,
@@ -108,6 +112,35 @@ CREATE TABLE IF NOT EXISTS agent_threads (
 );
 CREATE INDEX IF NOT EXISTS agent_threads_owner_updated_idx
   ON agent_threads(owner_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS resident_profile_values (
+  owner_id TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'user',
+  confirmed INTEGER NOT NULL DEFAULT 0,
+  remember INTEGER NOT NULL DEFAULT 1,
+  confirmed_at TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(owner_id, key)
+);
+
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL,
+  thread_id TEXT,
+  ticket_id TEXT,
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  message TEXT NOT NULL,
+  connector_id TEXT,
+  external_reference_id TEXT,
+  receipt_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS agent_runs_owner_updated_idx
+  ON agent_runs(owner_id, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS agent_messages (
   id TEXT PRIMARY KEY,
@@ -398,6 +431,7 @@ class LocalCommunityStore:
             self._conn.executescript(SCHEMA)
             self._ensure_schema_columns()
             self._seed_demo_feed()
+            self._ensure_demo_broken_streetlight_sample()
             self._repair_demo_evidence_counts()
             self._migrate_generic_thread_titles()
 
@@ -540,6 +574,201 @@ class LocalCommunityStore:
             "INSERT INTO community_action_events(id,user_id,action,created_at) VALUES (?,?,?,?)",
             (str(uuid.uuid4()), user_id, action, now.isoformat()),
         )
+
+    # ---- resident profile and durable runs -------------------------------
+    def get_profile(self, owner_id: str) -> ResidentProfile:
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT key,value,source,confirmed,remember,confirmed_at,updated_at
+                   FROM resident_profile_values WHERE owner_id=? ORDER BY key ASC""",
+                (owner_id,),
+            ).fetchall()
+        items = [
+            ProfileValue(
+                key=str(row["key"]),
+                value=str(row["value"]),
+                source=str(row["source"]),
+                confirmed=bool(row["confirmed"]),
+                remember=bool(row["remember"]),
+                confirmed_at=parse_datetime(row["confirmed_at"]) if row["confirmed_at"] else None,
+                updated_at=parse_datetime(str(row["updated_at"])),
+            )
+            for row in rows
+        ]
+        return ResidentProfile(items=items, updated_at=items[-1].updated_at if items else None)
+
+    def upsert_profile_value(
+        self,
+        owner_id: str,
+        *,
+        key: str,
+        value: str,
+        source: str = "user",
+        confirmed: bool = True,
+        remember: bool = True,
+    ) -> ProfileValue:
+        key = " ".join(key.strip().split()).lower()
+        value = " ".join(value.strip().split())
+        if not key or not value:
+            raise ValueError("Profile key and value are required")
+        now = iso_now()
+        confirmed_at = now if confirmed else None
+        if remember:
+            with self._transaction() as conn:
+                conn.execute(
+                    """INSERT INTO resident_profile_values(
+                       owner_id,key,value,source,confirmed,remember,confirmed_at,updated_at)
+                       VALUES (?,?,?,?,?,?,?,?)
+                       ON CONFLICT(owner_id,key) DO UPDATE SET
+                         value=excluded.value,source=excluded.source,confirmed=excluded.confirmed,
+                         remember=excluded.remember,confirmed_at=excluded.confirmed_at,
+                         updated_at=excluded.updated_at""",
+                    (
+                        owner_id,
+                        key,
+                        value,
+                        source,
+                        int(confirmed),
+                        int(remember),
+                        confirmed_at,
+                        now,
+                    ),
+                )
+        return ProfileValue(
+            key=key,
+            value=value,
+            source=source,  # type: ignore[arg-type]
+            confirmed=confirmed,
+            remember=remember,
+            confirmed_at=parse_datetime(confirmed_at) if confirmed_at else None,
+            updated_at=parse_datetime(now),
+        )
+
+    def delete_profile_value(self, owner_id: str, key: str) -> None:
+        with self._transaction() as conn:
+            conn.execute(
+                "DELETE FROM resident_profile_values WHERE owner_id=? AND key=?",
+                (owner_id, " ".join(key.strip().split()).lower()),
+            )
+
+    @staticmethod
+    def _run_from_row(row: sqlite3.Row) -> AgentRun:
+        try:
+            receipt = json.loads(row["receipt_json"] or "{}")
+        except json.JSONDecodeError:
+            receipt = {}
+        return AgentRun(
+            id=str(row["id"]),
+            owner_id=str(row["owner_id"]),
+            thread_id=row["thread_id"],
+            ticket_id=row["ticket_id"],
+            kind=str(row["kind"]),
+            status=AgentRunStatus(str(row["status"])),
+            message=str(row["message"]),
+            connector_id=row["connector_id"],
+            external_reference_id=row["external_reference_id"],
+            receipt=receipt if isinstance(receipt, dict) else {},
+            created_at=parse_datetime(str(row["created_at"])),
+            updated_at=parse_datetime(str(row["updated_at"])),
+        )
+
+    def create_run(
+        self,
+        owner_id: str,
+        *,
+        kind: str,
+        message: str,
+        thread_id: str | None = None,
+        ticket_id: str | None = None,
+        connector_id: str | None = None,
+        status: AgentRunStatus = AgentRunStatus.QUEUED,
+        receipt: dict[str, Any] | None = None,
+    ) -> AgentRun:
+        run_id = str(uuid.uuid4())
+        now = iso_now()
+        with self._transaction() as conn:
+            conn.execute(
+                """INSERT INTO agent_runs(
+                   id,owner_id,thread_id,ticket_id,kind,status,message,connector_id,
+                   external_reference_id,receipt_json,created_at,updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    run_id,
+                    owner_id,
+                    thread_id,
+                    ticket_id,
+                    kind,
+                    status.value,
+                    message,
+                    connector_id,
+                    None,
+                    json.dumps(receipt or {}, ensure_ascii=False, sort_keys=True),
+                    now,
+                    now,
+                ),
+            )
+        return self.get_run(owner_id, run_id)
+
+    def get_run(self, owner_id: str, run_id: str) -> AgentRun:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id,owner_id,thread_id,ticket_id,kind,status,message,connector_id,"
+                "external_reference_id,receipt_json,created_at,updated_at FROM agent_runs "
+                "WHERE id=? AND owner_id=?",
+                (run_id, owner_id),
+            ).fetchone()
+        if row is None:
+            raise NotFoundError("Agent run not found")
+        return self._run_from_row(row)
+
+    def list_runs(self, owner_id: str, limit: int = 30) -> list[AgentRun]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id,owner_id,thread_id,ticket_id,kind,status,message,connector_id,"
+                "external_reference_id,receipt_json,created_at,updated_at FROM agent_runs "
+                "WHERE owner_id=? ORDER BY updated_at DESC LIMIT ?",
+                (owner_id, max(1, min(limit, 100))),
+            ).fetchall()
+        return [self._run_from_row(row) for row in rows]
+
+    def update_run(
+        self,
+        owner_id: str,
+        run_id: str,
+        *,
+        status: AgentRunStatus | None = None,
+        message: str | None = None,
+        connector_id: str | None = None,
+        external_reference_id: str | None = None,
+        receipt: dict[str, Any] | None = None,
+    ) -> AgentRun:
+        self.get_run(owner_id, run_id)
+        updates: list[str] = []
+        values: list[Any] = []
+        if status is not None:
+            updates.append("status=?")
+            values.append(status.value)
+        if message is not None:
+            updates.append("message=?")
+            values.append(message)
+        if connector_id is not None:
+            updates.append("connector_id=?")
+            values.append(connector_id)
+        if external_reference_id is not None:
+            updates.append("external_reference_id=?")
+            values.append(external_reference_id)
+        if receipt is not None:
+            updates.append("receipt_json=?")
+            values.append(json.dumps(receipt, ensure_ascii=False, sort_keys=True))
+        if updates:
+            updates.append("updated_at=?")
+            values.extend([iso_now(), run_id, owner_id])
+            with self._transaction() as conn:
+                conn.execute(
+                    f"UPDATE agent_runs SET {', '.join(updates)} WHERE id=? AND owner_id=?",
+                    values,
+                )
+        return self.get_run(owner_id, run_id)
 
     # ---- agent threads -----------------------------------------------------
     def create_thread(self, owner_id: str, title: str, case_id: str | None = None) -> AgentThread:
@@ -2312,6 +2541,99 @@ class LocalCommunityStore:
         )
 
     # ---- seed and conversion helpers --------------------------------------
+    def _ensure_demo_broken_streetlight_sample(self) -> None:
+        """Keep one image-backed civic report available in the demo feed.
+
+        This is deliberately additive and idempotent so an existing local
+        database gets the sample without losing any resident-created data.
+        The image is stored through the same attachment tables and download
+        path used by user-published posts.
+        """
+
+        asset_path = (
+            Path(__file__).resolve().parents[2]
+            / "data"
+            / "demo"
+            / "broken-streetlight-sample.png"
+        )
+        if not asset_path.is_file():
+            return
+        content = asset_path.read_bytes()
+        attachment_id = "demo-attachment-broken-streetlight"
+        storage_key = f"system/{attachment_id}-broken-streetlight-sample.png"
+        storage_path = self.attachment_root / storage_key
+        storage_path.parent.mkdir(parents=True, exist_ok=True)
+        if not storage_path.is_file() or storage_path.read_bytes() != content:
+            storage_path.write_bytes(content)
+
+        now = iso_now()
+        digest = hashlib.sha256(content).hexdigest()
+        with self._transaction() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO public_posts(
+                   id,ticket_id,civitas_ticket_id,owner_id,author_name,title,body,locality,visibility,
+                   status,authority_id,vote_score,upvotes,downvotes,comment_count,evidence_count,is_demo,
+                   created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)""",
+                (
+                    "demo-post-4",
+                    "demo-ticket-4",
+                    "CX-BLR-DEMO-0004",
+                    "system",
+                    "Civic Desk",
+                    "Broken streetlight near Koramangala 5th Block",
+                    "The streetlight outside Koramangala 5th Block has been out after sunset for three nights. Sharing an illustrative sample so neighbours can add the exact pole location and date noticed.",
+                    "Koramangala",
+                    "locality",
+                    TicketStatus.NOT_SOLVED.value,
+                    "gba",
+                    25,
+                    29,
+                    4,
+                    0,
+                    0,
+                    now,
+                    now,
+                ),
+            )
+            seed_votes = [
+                ("demo-post-4", f"demo-up-demo-post-4-{index}", 1, now)
+                for index in range(29)
+            ] + [
+                ("demo-post-4", f"demo-down-demo-post-4-{index}", -1, now)
+                for index in range(4)
+            ]
+            conn.executemany(
+                "INSERT OR IGNORE INTO post_votes(post_id,user_id,value,created_at) VALUES (?,?,?,?)",
+                seed_votes,
+            )
+            conn.execute(
+                """INSERT OR IGNORE INTO community_attachments(
+                   id,thread_id,case_id,owner_id,filename,content_type,size_bytes,sha256,
+                   storage_key,visibility,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    attachment_id,
+                    None,
+                    "demo-ticket-4",
+                    "system",
+                    "broken-streetlight-sample.png",
+                    "image/png",
+                    len(content),
+                    digest,
+                    storage_key,
+                    "public_redacted",
+                    now,
+                ),
+            )
+            conn.execute(
+                "UPDATE community_attachments SET visibility='public_redacted' WHERE id=?",
+                (attachment_id,),
+            )
+            conn.execute(
+                """INSERT OR IGNORE INTO public_post_attachments(post_id,attachment_id,created_at)
+                   VALUES (?,?,?)""",
+                ("demo-post-4", attachment_id, now),
+            )
+
     def _seed_demo_feed(self) -> None:
         existing = self._conn.execute(
             "SELECT COUNT(*) AS count FROM public_posts WHERE is_demo=1"

@@ -1,6 +1,6 @@
 # CivitasX AWS foundation
 
-`template.yaml` describes the future AWS boundary for the local-first CivitasX
+`template.yaml` describes the AWS boundary for the local-first CivitasX
 product. It is intentionally separate from the local development loop; the
 local app runs with SQLite/filesystem/local model adapters and does not need to
 provision these resources.
@@ -15,7 +15,8 @@ The future Phase 2 AWS boundary includes:
 - Refreshed live-source documents and connector status are stored as separate objects under
   `runtime/live-sources/` and `runtime/live-status/`; local `/tmp` files are only a fallback.
 - A Lambda Web Adapter FastAPI function URL with a least-privilege runtime role.
-- An AWS Budget at the planned $80 ceiling, with an optional SNS email notification.
+- A private S3 frontend origin behind an HTTPS CloudFront distribution.
+- An optional AWS Budget alert with an SNS email notification.
 
 The application still enforces its own admission budget and browser concurrency.
 AWS Budgets alerts are an additional signal, not a hard spending cap. The
@@ -28,26 +29,19 @@ is enabled or that promotional credits cover it.
 From the repository root:
 
 ```bash
-aws cloudformation validate-template --template-body file://infra/template.yaml
 sam validate --template-file infra/template.yaml --lint
-sam build --template-file infra/template.yaml
-sam deploy --guided --template-file .aws-sam/build/template.yaml
+scripts/aws/deploy.sh
 ```
 
-`sam build` needs the Python dependencies in `services/api/requirements.txt`.
-The local host does not require Docker for unit tests; a CI runner with SAM
-and Docker should perform the final packaging build.
+The deployment script builds Linux ARM64 dependencies with `uv`, packages them
+with SAM, deploys the API/data/auth/frontend stack, publishes `apps/web/dist`
+to the private S3 origin, invalidates CloudFront, and runs `/api/health`.
+It does not require Docker.
 
-Before deployment, change `CognitoDomainPrefix`, set `FrontendOrigin` to the
-actual HTTPS origin, and provide `AlertEmail` if the team wants AWS Budget
-notifications. Confirm the email subscription and the AWS promotional-credit
-eligible-services list in the account first.
-
-After SAM reports the `ApiUrl` output, set that exact URL as the `CIVITAS_API_URL`
-environment variable in Amplify. The checked-in `amplify.yml` exports it during
-the Vite build; the frontend does not silently target a browser-local API in a
-hosted build. SAM and Amplify remain separate deployments so a frontend build
-cannot unexpectedly replace the API or its data stores.
+Set `CIVITAS_ALERT_EMAIL` if the team wants AWS Budget notifications. The
+production pilot keeps government browser submission disabled and caps Lambda
+URL attachment requests at 5 MB; move uploads directly to S3 before raising
+that limit.
 
 Do not make AWS deployment a prerequisite for feature development. First pass
 the local adapter contract tests, then deploy one provider at a time and run

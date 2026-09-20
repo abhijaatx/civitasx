@@ -1,0 +1,9 @@
+# Copy this table into ~/.codex/config.toml or add it with:
+# codex mcp add civitasx --url https://api.example.com/mcp/ \
+#   --bearer-token-env-var CIVITAS_ACCESS_TOKEN
+
+[mcp_servers.civitasx]
+url = "https://api.example.com/mcp/"
+bearer_token_env_var = "CIVITAS_ACCESS_TOKEN"
+default_tools_approval_mode = "prompt"
+tool_timeout_sec = 120

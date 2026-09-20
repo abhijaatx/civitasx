@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "civitasx": {
+      "type": "http",
+      "url": "https://api.example.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${CIVITAS_ACCESS_TOKEN}"
+      }
+    }
+  }
+}

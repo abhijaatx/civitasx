@@ -47,6 +47,26 @@ def test_missing_evidence_is_explicit():
     assert "could not find" in answer.explanation.casefold()
 
 
+def test_document_index_is_date_aware_and_openable():
+    index = ResearchIndex(Path(__file__).parents[1] / "data" / "corpus" / "manifest.json")
+
+    documents = index.list_documents(limit=5)
+
+    assert documents
+    assert documents[0].published_at is not None
+    assert all(
+        (documents[index].published_at or documents[index].retrieved_at)
+        >= (documents[index + 1].published_at or documents[index + 1].retrieved_at)
+        for index in range(len(documents) - 1)
+    )
+
+    detail = index.get_document_detail("bmrcl-phase2a-dpr", page=44, page_limit=1)
+    assert detail.document.source_id == "bmrcl-phase2a-dpr"
+    assert len(detail.pages) == 1
+    assert detail.pages[0].page == 44
+    assert detail.pages[0].passage
+
+
 def test_routing_questions_keep_multi_authority_matches_ambiguous():
     index = ResearchIndex(Path(__file__).parents[1] / "data" / "corpus" / "manifest.json")
 

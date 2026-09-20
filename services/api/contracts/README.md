@@ -3,9 +3,10 @@
 The final product boundary is documented in the repository root's
 [`DIRECTION.md`](../../DIRECTION.md). This file describes the currently
 implemented local wire shapes for cases, research, Agent threads, attachments,
-tickets, feed posts, comments, votes, follows, moderation, preparation
-checkpoints, comparisons, shares, and notifications. Government submission
-remains an explicit credential-dependent boundary.
+resident profiles, durable agent runs, tickets, feed posts, comments, votes,
+follows, moderation, preparation checkpoints, comparisons, shares, and
+notifications. Government submission remains an explicit credential-dependent
+boundary.
 
 `civitas_api.models` is the runtime source of truth for the Pydantic contracts.
 The browser client mirrors the public shapes in `apps/web/src/types.ts`.
@@ -34,8 +35,11 @@ service is running.
     comment, report, share, and activity endpoints operate on the same public
     post ID.
 14. `POST /api/tickets/{id}/prepare` and `/preparation/approve` → local
-    requirements check, content hash, review gate, and durable checkpoint. A
-    valid approval still returns `submission_enabled: false` in local mode.
+    requirements check, content hash, review gate, and durable checkpoint. The
+    approval reports whether the selected connector is enabled; local mode is
+    preparation-only, the reviewed iPGRS connector opens a supervised browser
+    run, and a configured certified official API uses an idempotency key and a
+    verified authority reference.
 15. `POST /api/sources/compare` → page-linked document comparison. `GET
     /share/{token}` → an expiring redacted snapshot with no private case data.
 16. `GET /api/live/connectors` and `POST
@@ -68,6 +72,28 @@ same bearer token as the REST API. The available tools are:
 - `compare_civic_sources(source_id, baseline_source_id)`
 - `get_civic_feed(sort?, locality?, topic?, limit?)`
 - `get_my_ticket(ticket_id)`
+- `get_resident_profile()`
+- `remember_profile_value(key, value, source?, confirmed?, remember?)`
+- `forget_profile_value(key)`
+- `create_agent_thread(goal, title?, case_id?)`
+- `list_agent_threads(limit?)`
+- `get_agent_thread(thread_id)`
+- `send_agent_message(thread_id, content, attachment_ids?, client_message_id?)`
+- `prepare_submission(ticket_id, fields?, attachment_ids?)`
+- `get_submission_review(ticket_id)`
+- `approve_submission(ticket_id, content_hash)`
+- `submit_approved_request(ticket_id, content_hash, simulation?)` → a synthetic
+  receipt in demo mode or a supervised iPGRS run that pauses for classification,
+  OTP, and CAPTCHA.
+- `resume_run(run_id, verification_code?, send_otp?, submit?, resident_attestation?)`
+  → continue the supervised run without persisting the verification code;
+  final submission requires the resident attestation.
+- `cancel_run(run_id)` → close the supervised browser and cancel the run.
+- `prepare_public_post(ticket_id, title, body, locality?, visibility?, display_name?, attachment_ids?)`
+- `publish_approved_post(ticket_id, title, body, redaction_content_hash, locality?, visibility?, display_name?, attachment_ids?, redaction_approved)`
+- `get_run_status(run_id)`
+- `resume_run(run_id)`
+- `cancel_run(run_id)`
 - `list_live_sources()`
 
 Tool arguments never include an owner ID. The transport middleware derives the

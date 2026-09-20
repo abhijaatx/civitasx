@@ -1,5 +1,21 @@
 # CivitasX AWS checks
 
+## Deploy the AWS pilot
+
+The repeatable deployment entrypoint builds Linux ARM64 dependencies, deploys
+the SAM stack, configures the CloudFront origin and Cognito callback, publishes
+the Vite SPA, and runs an API health check:
+
+```bash
+scripts/aws/deploy.sh
+```
+
+Optional variables include `CIVITAS_ALERT_EMAIL`,
+`CIVITAS_COGNITO_DOMAIN_PREFIX`, `CIVITAS_BEDROCK_MODEL`, and
+`CIVITAS_FRONTEND_ORIGIN`. Keep `CIVITAS_IPGRS_SUBMISSION_ENABLED=false` for
+the Lambda deployment until the browser connector is migrated to AgentCore
+Browser.
+
 Run the safe control-plane preflight first:
 
 ```bash

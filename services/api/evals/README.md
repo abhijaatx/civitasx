@@ -28,3 +28,15 @@ uv run python evals/run_agent_eval.py --base-url http://127.0.0.1:8000 --limit 3
 It creates an isolated local eval account, prints JSON results, and exits
 non-zero if a case does not complete, misses a required tool, or includes its
 forbidden claim.
+
+The architecture-level resident coverage evaluation is provider-independent:
+
+```bash
+cd services/api
+uv run --extra architecture python evals/run_resident_arch_eval.py
+```
+
+It scores whether the capability graph can answer from deterministic/indexed
+evidence, safely route or draft, ask for a missing slot, require a live
+connector, or enforce approval. It does not count a clarification or a draft
+as a completed government action.

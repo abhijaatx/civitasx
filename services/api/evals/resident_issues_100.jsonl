@@ -1,0 +1,100 @@
+{"id":"road-01","prompt":"There is a large pothole on 27th Main Road, HSR Layout."}
+{"id":"road-02","prompt":"The road near Agara flooded after last night's rain."}
+{"id":"road-03","prompt":"An open manhole is outside my apartment."}
+{"id":"road-04","prompt":"Road resurfacing stopped halfway and left loose gravel everywhere."}
+{"id":"road-05","prompt":"Cars are blocking the footpath near my house."}
+{"id":"road-06","prompt":"A shop has occupied the entire pedestrian walkway."}
+{"id":"road-07","prompt":"Vehicles are parked illegally outside a school every morning."}
+{"id":"road-08","prompt":"The traffic signal at Silk Board is not working."}
+{"id":"road-09","prompt":"There is no safe pedestrian crossing near the metro station."}
+{"id":"road-10","prompt":"The road sign is missing or points in the wrong direction."}
+{"id":"water-01","prompt":"Our apartment has had no water for two days."}
+{"id":"water-02","prompt":"Water pressure is extremely low every morning."}
+{"id":"water-03","prompt":"The tap water has become brown and muddy."}
+{"id":"water-04","prompt":"Sewage is overflowing onto the road."}
+{"id":"water-05","prompt":"There is a continuous foul smell from the manhole."}
+{"id":"water-06","prompt":"The storm-water drain is blocked with silt."}
+{"id":"water-07","prompt":"Rainwater is entering our homes during every storm."}
+{"id":"water-08","prompt":"A public water pipe is leaking continuously."}
+{"id":"water-09","prompt":"The private tanker is charging residents unfairly."}
+{"id":"water-10","prompt":"There may be an illegal borewell operating nearby."}
+{"id":"waste-01","prompt":"Garbage collection has been skipped for a week."}
+{"id":"waste-02","prompt":"The waste collector is mixing wet and dry waste."}
+{"id":"waste-03","prompt":"Someone is dumping garbage beside the lake."}
+{"id":"waste-04","prompt":"Construction debris has been left on the public road."}
+{"id":"waste-05","prompt":"The public garbage bin is overflowing."}
+{"id":"waste-06","prompt":"A dead animal has been lying near the apartment gate."}
+{"id":"waste-07","prompt":"People are burning plastic waste in the vacant lot."}
+{"id":"waste-08","prompt":"The public toilet is unusable and has no water."}
+{"id":"waste-09","prompt":"Where can I dispose of an old laptop and batteries?"}
+{"id":"waste-10","prompt":"The footpath is covered with dog waste."}
+{"id":"power-01","prompt":"The streetlight outside my building has stopped working."}
+{"id":"power-02","prompt":"The entire lane becomes dark after sunset."}
+{"id":"power-03","prompt":"An electric wire is hanging dangerously low."}
+{"id":"power-04","prompt":"An electricity pole is sparking during rain."}
+{"id":"power-05","prompt":"Our area experiences repeated power cuts every evening."}
+{"id":"power-06","prompt":"The transformer near our school looks unsafe."}
+{"id":"power-07","prompt":"Our street has never had a streetlight."}
+{"id":"power-08","prompt":"The streetlight keeps flickering and switching off."}
+{"id":"power-09","prompt":"Loose telecom and electricity cables are tangled on the pole."}
+{"id":"power-10","prompt":"The solar streetlights in our park are not working."}
+{"id":"transport-01","prompt":"The bus route serving our locality has changed."}
+{"id":"transport-02","prompt":"Buses are passing our stop without stopping."}
+{"id":"transport-03","prompt":"There is no shelter at the bus stop."}
+{"id":"transport-04","prompt":"How do I report poor access to the metro station?"}
+{"id":"transport-05","prompt":"The metro station lift has been out of order for months."}
+{"id":"transport-06","prompt":"An auto driver refused the meter and overcharged me."}
+{"id":"transport-07","prompt":"A traffic diversion was introduced without any signs."}
+{"id":"transport-08","prompt":"There is no reliable public transport after 10 p.m."}
+{"id":"transport-09","prompt":"The footpath connecting our area to the metro is unusable."}
+{"id":"transport-10","prompt":"Traffic is permanently blocked near the railway crossing."}
+{"id":"police-01","prompt":"My phone was stolen in HSR Layout. Which police station should I visit?"}
+{"id":"police-02","prompt":"I lost my phone but do not know whether to file an e-Lost report or theft complaint."}
+{"id":"police-03","prompt":"My motorcycle was stolen from outside my apartment."}
+{"id":"police-04","prompt":"Someone broke into my parked car."}
+{"id":"police-05","prompt":"There was a chain-snatching incident near our bus stop."}
+{"id":"police-06","prompt":"I am being harassed right now. What should I do?"}
+{"id":"police-07","prompt":"There is suspicious activity near the abandoned building."}
+{"id":"police-08","prompt":"A child has gone missing from our neighbourhood."}
+{"id":"police-09","prompt":"I transferred money to an online fraudster."}
+{"id":"police-10","prompt":"The police station says this area is outside its jurisdiction."}
+{"id":"government-01","prompt":"I paid property tax but cannot download the receipt."}
+{"id":"government-02","prompt":"How do I transfer the khata after buying a flat?"}
+{"id":"government-03","prompt":"Can I check whether a building plan is approved?"}
+{"id":"government-04","prompt":"There is an error in my birth certificate."}
+{"id":"government-05","prompt":"How do I obtain a death certificate?"}
+{"id":"government-06","prompt":"How can I update my address on my voter ID?"}
+{"id":"government-07","prompt":"How do I apply for a street-vendor or trade licence?"}
+{"id":"government-08","prompt":"Which department handles a missing municipal document?"}
+{"id":"government-09","prompt":"How do I file an RTI about road works?"}
+{"id":"government-10","prompt":"Who is the current ward officer for my locality?"}
+{"id":"planning-01","prompt":"My neighbour is constructing an extra floor without permission."}
+{"id":"planning-02","prompt":"Trees are being cut down near the apartment complex."}
+{"id":"planning-03","prompt":"A lake boundary is being encroached upon."}
+{"id":"planning-04","prompt":"Construction work continues late into the night."}
+{"id":"planning-05","prompt":"Dust from the construction site is affecting our homes."}
+{"id":"planning-06","prompt":"A lake inlet has been blocked by a compound wall."}
+{"id":"planning-07","prompt":"A public park is being used for private construction."}
+{"id":"planning-08","prompt":"Is this plot zoned for commercial construction?"}
+{"id":"planning-09","prompt":"How do I check whether a building has an occupancy certificate?"}
+{"id":"planning-10","prompt":"Our apartment fire exits are blocked."}
+{"id":"health-01","prompt":"Mosquitoes are breeding in stagnant water near our street."}
+{"id":"health-02","prompt":"There are too many stray dogs around the school."}
+{"id":"health-03","prompt":"A resident was bitten by a stray dog. Where should we report it?"}
+{"id":"health-04","prompt":"Smoke from a nearby business is entering our homes."}
+{"id":"health-05","prompt":"The public building has no wheelchair ramp."}
+{"id":"health-06","prompt":"Wheelchairs cannot use the footpath because of steps and debris."}
+{"id":"health-07","prompt":"There is no tactile paving for visually impaired pedestrians."}
+{"id":"health-08","prompt":"Children are crossing a dangerous road outside the school."}
+{"id":"health-09","prompt":"The public toilet is not accessible to elderly residents."}
+{"id":"health-10","prompt":"A loud event is continuing after midnight."}
+{"id":"resilience-01","prompt":"The theft happened near Microsoft's office in HSR Layout."}
+{"id":"resilience-02","prompt":"Which station is nearest, and which station actually has jurisdiction?"}
+{"id":"resilience-03","prompt":"The incident happened on the boundary between HSR Layout and Bellandur."}
+{"id":"resilience-04","prompt":"Give me the latest official ward information, not an old record."}
+{"id":"resilience-05","prompt":"Two websites list different phone numbers for the police station."}
+{"id":"resilience-06","prompt":"I uploaded a photo. Can you identify the location without exposing my private metadata?"}
+{"id":"resilience-07","prompt":"Draft the complaint, but keep my identity and attachments private."}
+{"id":"resilience-08","prompt":"File the complaint for me."}
+{"id":"resilience-09","prompt":"Please answer this in Kannada, then give me the English complaint draft."}
+{"id":"resilience-10","prompt":"Use the same location and evidence from my previous message, but update the incident time."}

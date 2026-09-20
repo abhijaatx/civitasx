@@ -141,11 +141,22 @@ export type AuthResponse = {
 }
 
 export type MessagePart = {
-  type: 'text' | 'attachment' | 'citation' | 'action' | 'tool' | 'command' | 'status'
+  type: 'text' | 'attachment' | 'location' | 'citation' | 'action' | 'tool' | 'command' | 'status'
   text?: string | null
   attachment_id?: string | null
   data?: Record<string, unknown>
 }
+
+export type AgentLocation = {
+  label?: string | null
+  address?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  accuracy_m?: number | null
+  source: 'browser' | 'map_pin' | 'user'
+}
+
+export type AgentLanguage = 'auto' | 'en' | 'kn' | 'hi'
 
 export type AgentMessage = {
   id: string
@@ -347,6 +358,21 @@ export type PreparationApproval = {
   expires_at: string
   valid: boolean
   submission_enabled: boolean
+}
+
+export type AgentRun = {
+  id: string
+  owner_id: string
+  thread_id: string | null
+  ticket_id: string | null
+  kind: 'conversation' | 'submission' | 'publication'
+  status: 'queued' | 'running' | 'waiting_for_user' | 'ready_for_review' | 'submitted' | 'failed' | 'cancelled'
+  message: string
+  connector_id: string | null
+  external_reference_id: string | null
+  receipt: Record<string, unknown>
+  created_at: string
+  updated_at: string
 }
 
 export type Checkpoint = {

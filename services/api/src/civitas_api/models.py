@@ -7,9 +7,17 @@ review, and submission shapes stay stable for the next phases.
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, ValidationInfo, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 
 def _clean_text(value: str) -> str:
@@ -30,6 +38,83 @@ class User(BaseModel):
     name: str
     email: str
     created_at: datetime | None = None
+
+
+class ProfileValue(BaseModel):
+    """A resident value that may be reused after explicit confirmation."""
+
+    key: str = Field(min_length=1, max_length=80)
+    value: str = Field(min_length=1, max_length=4000)
+    source: Literal["user", "conversation", "document"] = "user"
+    confirmed: bool = False
+    remember: bool = True
+    confirmed_at: datetime | None = None
+    updated_at: datetime
+
+
+class ResidentProfile(BaseModel):
+    """Owner-scoped reusable details for conversational form filling."""
+
+    items: list[ProfileValue] = Field(default_factory=list)
+    updated_at: datetime | None = None
+
+
+class UpsertProfileValueRequest(BaseModel):
+    key: str = Field(min_length=1, max_length=80)
+    value: str = Field(min_length=1, max_length=4000)
+    source: Literal["user", "conversation", "document"] = "user"
+    confirmed: bool = True
+    remember: bool = True
+
+    @field_validator("key", "value")
+    @classmethod
+    def clean_profile_text(cls, value: str) -> str:
+        return _required_text(value, minimum=1, label="Profile value")
+
+
+class DeleteProfileValueRequest(BaseModel):
+    key: str = Field(min_length=1, max_length=80)
+
+
+class AgentRunStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    WAITING_FOR_USER = "waiting_for_user"
+    READY_FOR_REVIEW = "ready_for_review"
+    SUBMITTED = "submitted"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AgentRun(BaseModel):
+    id: str
+    owner_id: str
+    thread_id: str | None = None
+    ticket_id: str | None = None
+    kind: Literal["conversation", "submission", "publication"]
+    status: AgentRunStatus
+    message: str
+    connector_id: str | None = None
+    external_reference_id: str | None = None
+    receipt: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResumeRunRequest(BaseModel):
+    """User-controlled continuation for a browser run.
+
+    The verification code is accepted only in memory and is never persisted in
+    the run receipt or event log.
+    """
+
+    verification_code: str | None = Field(default=None, min_length=1, max_length=32)
+    send_otp: bool = False
+    submit: bool = False
+    # The final button is a deliberate resident attestation that the visible
+    # portal classification and any CAPTCHA/consent step were reviewed.  The
+    # API never tries to infer or bypass those controls.
+    resident_attestation: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -467,7 +552,16 @@ class AgentMessageRole(StrEnum):
 
 
 class MessagePart(BaseModel):
-    type: Literal["text", "attachment", "citation", "action", "tool", "command", "status"]
+    type: Literal[
+        "text",
+        "attachment",
+        "location",
+        "citation",
+        "action",
+        "tool",
+        "command",
+        "status",
+    ]
     text: str | None = None
     attachment_id: str | None = None
     data: dict[str, Any] = Field(default_factory=dict)
@@ -521,9 +615,30 @@ class UpdateAgentThreadRequest(BaseModel):
         return _required_text(value, minimum=1, label="Conversation title")
 
 
+class AgentLocation(BaseModel):
+    """A consented map/device location attached to one agent turn."""
+
+    label: str | None = Field(default=None, max_length=240)
+    address: str | None = Field(default=None, max_length=500)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    accuracy_m: float | None = Field(default=None, ge=0, le=100000)
+    source: Literal["browser", "map_pin", "user"] = "user"
+
+    @model_validator(mode="after")
+    def validate_location_reference(self) -> Self:
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("Latitude and longitude must be supplied together")
+        if not any((self.label, self.address, self.latitude is not None)):
+            raise ValueError("A location label, address, or coordinate is required")
+        return self
+
+
 class SendAgentMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=20000)
     attachment_ids: list[str] = Field(default_factory=list, max_length=8)
+    location: AgentLocation | None = None
+    response_language: Literal["auto", "en", "kn", "hi"] = "auto"
     client_message_id: str | None = Field(default=None, min_length=8, max_length=128)
 
     @field_validator("content")
