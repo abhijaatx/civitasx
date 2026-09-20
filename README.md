@@ -8,7 +8,7 @@ CivitasX is a local-first civic network for Bengaluru residents. It combines a p
 
 The Phase 2 AWS boundary is defined in [`infra/template.yaml`](infra/template.yaml):
 
-![CivitasX AWS Architecture — Phase 2](docs/aws-architecture-phase2.png)
+![AWS architecture diagram](docs/aws-architecture-phase2.png)
 
 The frontend bucket, artifacts bucket, and source-corpus bucket remain private. The application uses Cognito for production identity, DynamoDB for owner-scoped state, S3 for artifacts and versioned source documents, and Bedrock only when the configured cloud provider is enabled.
 
